@@ -1,218 +1,154 @@
 # 🤖 AI Workflow Platform
 
-A visual AI workflow design and execution platform based on React + FastAPI, supporting drag-and-drop workflow editing, AI agent integration, human intervention nodes, and more.
+## 🚀 概述
 
-## ✨ Key Features
+AI Workflow Platform 是一个现代化的智能工作流设计和执行平台，采用最新的OpenAI风格界面设计，为用户提供直观、优雅的AI工作流管理体验。
 
-- 🎨 **Visual Editor**: Drag-and-drop workflow design based on React Flow
-- 🤖 **AI Agent Integration**: Support for large language models like Qwen API
-- ⏸️ **Human Intervention Support**: Workflow pause and human feedback functionality
-- 🔄 **Real-time Execution Monitoring**: Visual workflow execution status
-- 📊 **Execution History Management**: Complete execution records and result viewing
-- 🔧 **Variable Management**: Support for Jinja2 template rendering
-- 🎯 **Multiple Node Types**: Start, Agent, Condition, Human Control, and End nodes
+## ✨ 新的UI特性
 
-## 🏗️ Technical Architecture
+### OpenAI风格设计
+- **现代化界面**: 采用简洁、现代的设计语言
+- **优雅的颜色方案**: 使用灰色调为主的专业配色
+- **精致的图标**: 使用Heroicons提供的现代SVG图标
+- **流畅的动画**: 添加了微妙的过渡动画和悬停效果
+- **中文界面**: 完全本地化的中文用户界面
 
-### Backend
-- **FastAPI**: Modern Python web framework
-- **SQLAlchemy**: ORM database operations
-- **SQLite**: Lightweight database
-- **Jinja2**: Template engine
-- **Pydantic**: Data validation
+### 视觉改进
+- **卡片式设计**: 工作流以现代卡片形式展示
+- **悬停效果**: 丰富的交互反馈和视觉提示
+- **状态标识**: 清晰的工作流状态显示
+- **响应式布局**: 适配不同屏幕尺寸的网格布局
+- **优化的加载状态**: 现代化的加载动画
 
-### Frontend
-- **React 19**: Modern frontend framework
-- **TypeScript**: Type safety
-- **React Flow**: Visual workflow editing
-- **Tailwind CSS**: Modern UI design
-- **Axios**: HTTP client
+### 用户体验提升
+- **直观的导航**: 简洁的顶部导航栏
+- **快速操作**: 卡片悬停时显示操作按钮
+- **优雅的弹窗**: 现代化的模态对话框设计
+- **清晰的层次**: 良好的信息架构和视觉层次
 
-## 🚀 Quick Start
+## 🛠️ 技术栈
 
-### Requirements
+### 前端
+- React 18 + TypeScript
+- Tailwind CSS
+- React Flow (工作流可视化)
+- Heroicons (图标库)
 
-- Python 3.9+
-- Node.js 18+
-- npm or yarn
+### 后端
+- Python + Flask
+- SQLite 数据库
+- RESTful API
 
-### Backend Setup
+## 📁 项目结构
 
-1. **Clone the project**
+```
+ai_workflow/
+├── frontend/                 # React前端应用
+│   ├── src/
+│   │   ├── components/      # UI组件
+│   │   │   ├── WorkflowManager/    # 工作流管理器
+│   │   │   ├── WorkflowEditor/     # 工作流编辑器
+│   │   │   ├── ExecutionView/      # 执行视图
+│   │   │   └── NodeTypes/          # 节点类型组件
+│   │   ├── services/        # API服务
+│   │   ├── types/          # TypeScript类型定义
+│   │   └── App.tsx         # 主应用组件
+│   └── package.json
+├── backend/                  # Flask后端API
+│   ├── app.py              # 主应用文件
+│   ├── models.py           # 数据模型
+│   └── requirements.txt
+└── README.md
+```
+
+## 🚀 快速开始
+
+### 环境要求
+- Node.js 16+
+- Python 3.8+
+
+### 安装和运行
+
+1. **克隆项目**
    ```bash
    git clone <repository-url>
    cd ai_workflow
    ```
 
-2. **Install Python dependencies**
+2. **启动后端服务**
    ```bash
    cd backend
    pip install -r requirements.txt
+   python app.py
    ```
 
-3. **Configure environment variables**
-   ```bash
-   cp env.example .env
-   # Edit .env file and configure Qwen API key
-   ```
-
-4. **Initialize database**
-   ```bash
-   # Database will be created automatically on first run
-   ```
-
-5. **Start backend service**
-   ```bash
-   python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-### Frontend Setup
-
-1. **Install Node.js dependencies**
+3. **启动前端应用**
    ```bash
    cd frontend
    npm install
-   ```
-
-2. **Start frontend service**
-   ```bash
    npm start
    ```
 
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+4. **访问应用**
+   打开浏览器访问 `http://localhost:3000`
 
-## 🔧 Configuration
+## 🎯 主要功能
 
-### Environment Variables
+### 工作流管理
+- ✅ 创建和管理AI工作流
+- ✅ 工作流状态跟踪（活跃/草稿/归档）
+- ✅ 搜索和筛选功能
+- ✅ 工作流描述和元数据管理
 
-Create a `backend/.env` file and configure the following variables:
+### 可视化编辑
+- ✅ 拖拽式工作流设计
+- ✅ 多种节点类型支持
+- ✅ 节点配置面板
+- ✅ 实时预览和验证
 
-```env
-# Qwen API Configuration
-QwenToken=your-qwen-api-token-here
-```
+### 执行监控
+- ✅ 工作流执行状态监控
+- ✅ 实时日志查看
+- ✅ 执行历史记录
+- ✅ 错误诊断和调试
 
-### Qwen API Setup
+## 🎨 设计原则
 
-1. Visit [Alibaba Cloud DashScope](https://dashscope.aliyuncs.com/)
-2. Get your API Token
-3. Configure `QwenToken` in the `.env` file
+本项目的UI设计遵循以下原则：
 
-## 📖 User Guide
+1. **简洁性**: 避免不必要的视觉噪音，专注于核心功能
+2. **一致性**: 统一的设计语言和交互模式
+3. **可访问性**: 良好的对比度和键盘导航支持
+4. **响应性**: 适配各种设备和屏幕尺寸
+5. **现代性**: 采用当前最佳的UI设计实践
 
-### Creating Workflows
+## 🔧 开发说明
 
-1. Click "Workflow Manager"
-2. Click "Create New Workflow"
-3. Enter workflow name and description
+### 自定义样式
+项目使用Tailwind CSS作为主要样式框架，并在 `src/index.css` 中添加了自定义样式：
 
-### Designing Workflows
+- `.line-clamp-2` 和 `.line-clamp-3`: 文本截断样式
+- 自定义滚动条样式
+- 优化的焦点环样式
 
-1. Add nodes in the editor:
-   - **Start Node**: Define initial variables
-   - **AI Agent**: Configure AI prompts and outputs
-   - **Condition Node**: Set branching logic
-   - **Human Control**: Pause for human input
-   - **End Node**: Define final output
+### 组件设计
+- 所有组件都采用函数式组件和React Hooks
+- 使用TypeScript确保类型安全
+- 遵循单一职责原则，保持组件简洁
 
-2. Connect nodes to create workflow
+### API集成
+- 使用统一的API客户端进行后端通信
+- 错误处理和加载状态管理
+- 支持异步操作和状态更新
 
-3. Configure parameters for each node
+## 📄 许可证
 
-### Executing Workflows
+MIT License
 
-1. Click "Execute Workflow" to start
-2. Monitor status in "Execution Manager"
-3. For human control nodes, click "Human Feedback" to intervene
+## 🤝 贡献
 
-## 🔄 Node Types
+欢迎提交Issue和Pull Request来改进这个项目！
 
-### Start Node
-- Define workflow initial variables
-- Support JSON format variable configuration
+---
 
-### AI Agent Node
-- Integrate large language models like Qwen
-- Support Jinja2 template variable references
-- Configurable output variable names
-
-### Condition Node
-- Expression-based conditional branching
-- Support True/False output ports
-- Use variables for condition evaluation
-
-### Human Control Node
-- Pause workflow execution
-- Support variable editing
-- Integrated AI chat assistant
-
-### End Node
-- Define workflow final output
-- Support Jinja2 template rendering
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-ai_workflow/
-├── backend/                 # Backend code
-│   ├── app/
-│   │   ├── api/            # API routes
-│   │   ├── core/           # Core logic
-│   │   ├── models/         # Data models
-│   │   └── main.py         # Application entry
-│   └── requirements.txt    # Python dependencies
-├── frontend/               # Frontend code
-│   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── services/       # API services
-│   │   └── types/          # TypeScript types
-│   └── package.json        # Node.js dependencies
-└── README.md              # Project documentation
-```
-
-### API Documentation
-
-After starting the backend service, visit http://localhost:8000/docs to view the complete API documentation.
-
-### Development Tools
-
-```bash
-# Backend testing
-cd backend
-python -m pytest
-
-# Frontend testing
-cd frontend
-npm test
-
-# Code formatting
-npm run format
-```
-
-## 🎯 Use Cases
-
-- **Business Process Automation**: Design complex business workflows with human approval steps
-- **AI-Powered Decision Making**: Create workflows that combine AI analysis with human judgment
-- **Data Processing Pipelines**: Build data transformation workflows with conditional logic
-- **Customer Service Automation**: Implement chatbot workflows with escalation to human agents
-- **Content Generation**: Create AI-assisted content workflows with human review
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 🙏 Acknowledgments
-
-- [React Flow](https://reactflow.dev/) for the visual workflow editor
-- [FastAPI](https://fastapi.tiangolo.com/) for the modern Python web framework
-- [Alibaba Cloud DashScope](https://dashscope.aliyuncs.com/) for AI model integration
-- [Tailwind CSS](https://tailwindcss.com/) for the beautiful UI design 
+🎉 **享受使用新的OpenAI风格界面！**
