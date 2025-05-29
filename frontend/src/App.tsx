@@ -61,18 +61,18 @@ function App() {
   };
 
   const renderNavigation = () => (
-    <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
+    <div className="bg-white/95 backdrop-blur-lg border-b border-white/30 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Title */}
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg transform hover:scale-105 transition-transform duration-200">
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd"/>
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 AI Workflow
               </h1>
             </div>
@@ -82,59 +82,59 @@ function App() {
           <div className="flex items-center space-x-1">
             <button
               onClick={() => setCurrentView(AppView.MANAGER)}
-              className={`px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
                 currentView === AppView.MANAGER
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
+                  : 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
               }`}
             >
               {getViewIcon(AppView.MANAGER)}
-              <span>工作流</span>
+              <span>Workflows</span>
             </button>
             
             <button
               onClick={() => setCurrentView(AppView.EDITOR)}
               disabled={!selectedWorkflow && currentView !== AppView.EDITOR}
-              className={`px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
                 currentView === AppView.EDITOR
-                  ? 'bg-gray-900 text-white'
+                  ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
                   : selectedWorkflow
-                  ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  : 'text-gray-400 cursor-not-allowed'
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
+                  : 'text-gray-400 cursor-not-allowed opacity-50'
               }`}
             >
               {getViewIcon(AppView.EDITOR)}
-              <span>编辑器</span>
+              <span>Editor</span>
             </button>
 
             <button
               onClick={() => setCurrentView(AppView.EXECUTION)}
               disabled={!selectedWorkflow}
-              className={`px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
                 currentView === AppView.EXECUTION
-                  ? 'bg-gray-900 text-white'
+                  ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
                   : selectedWorkflow
-                  ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  : 'text-gray-400 cursor-not-allowed'
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
+                  : 'text-gray-400 cursor-not-allowed opacity-50'
               }`}
             >
               {getViewIcon(AppView.EXECUTION)}
-              <span>执行</span>
+              <span>Execution</span>
             </button>
           </div>
         </div>
 
         {/* Breadcrumb */}
         {selectedWorkflow && (
-          <div className="pb-4 flex items-center space-x-2 text-sm text-gray-500">
+          <div className="pb-4 flex items-center space-x-2 text-sm text-gray-600">
             <span className="font-medium text-gray-900">{selectedWorkflow.name}</span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium shadow-sm ${
               selectedWorkflow.status === 'active' 
-                ? 'bg-green-100 text-green-700' 
+                ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200' 
                 : selectedWorkflow.status === 'draft'
-                ? 'bg-yellow-100 text-yellow-700'
-                : 'bg-gray-100 text-gray-700'
+                ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border border-yellow-200'
+                : 'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-800 border border-gray-200'
             }`}>
               {selectedWorkflow.status}
             </span>
@@ -169,15 +169,15 @@ function App() {
         );
       default:
         return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center p-8 bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center p-8 bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20">
+              <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"/>
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">未知视图</h2>
-              <p className="text-gray-600">请选择一个有效的视图</p>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Unknown View</h2>
+              <p className="text-gray-600">Please select a valid view</p>
             </div>
           </div>
         );
@@ -185,13 +185,30 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {renderNavigation()}
-      <main className="flex-1">
-        {renderCurrentView()}
-      </main>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-purple-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-indigo-400/20 to-pink-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-cyan-400/10 to-blue-600/10 rounded-full blur-3xl"></div>
+      </div>
+      
+      {/* Grid background pattern */}
+      <div 
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='1.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+        }}
+      ></div>
+      
+      <div className="relative z-10">
+        {renderNavigation()}
+        <main className="flex-1">
+          {renderCurrentView()}
+        </main>
+      </div>
     </div>
   );
 }
 
-export default App;
+export default App; 
