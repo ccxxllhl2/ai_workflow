@@ -7,10 +7,12 @@ from app.database.database import get_db
 from app.models.execution import Execution, ExecutionStatus
 from app.models.workflow import Workflow
 from app.models.variable import Variable
+from app.models.execution_history import ExecutionHistory, ChatMessage, ExecutionHistoryStatus
 from app.models.schemas import ExecutionCreate, ExecutionResponse, WorkflowExecuteRequest, ContinueExecutionRequest
 from app.core.workflow_engine import WorkflowEngine
 from app.core.variable_manager import VariableManager
 import json
+from datetime import datetime
 
 router = APIRouter()
 
@@ -92,6 +94,38 @@ async def continue_execution(
             raise HTTPException(status_code=400, detail="Execution is not paused")
         
         print(f"DEBUG: Before continue - Status: {execution.status}, Current Node: {execution.current_node}")
+        
+        # 如果当前节点是human_control，收集聊天历史
+        if execution.current_node:
+            # 获取当前节点的聊天记录
+            chat_messages = db.query(ChatMessage).filter(
+                ChatMessage.execution_id == execution_id,
+                ChatMessage.node_id == execution.current_node
+            ).order_by(ChatMessage.timestamp).all()
+            
+            if chat_messages:
+                # 将聊天记录转换为JSON格式
+                chat_history = []
+                for msg in chat_messages:
+                    chat_history.append({
+                        "role": msg.role,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp.isoformat()
+                    })
+                
+                # 更新执行历史记录中的聊天历史
+                history_record = db.query(ExecutionHistory).filter(
+                    ExecutionHistory.execution_id == execution_id,
+                    ExecutionHistory.node_id == execution.current_node,
+                    ExecutionHistory.status == ExecutionHistoryStatus.PAUSED
+                ).first()
+                
+                if history_record:
+                    history_record.chat_history = json.dumps(chat_history, ensure_ascii=False)
+                    history_record.status = ExecutionHistoryStatus.COMPLETED
+                    history_record.completed_at = datetime.utcnow()
+                    history_record.duration = (history_record.completed_at - history_record.started_at).total_seconds()
+                    db.commit()
         
         # 直接执行工作流继续，不使用后台任务
         engine = WorkflowEngine(db)
@@ -223,6 +257,15 @@ async def chat_with_qwen(
     
     # 调用千问API
     try:
+        # 保存用户消息
+        user_message = ChatMessage(
+            execution_id=execution_id,
+            node_id=execution.current_node,
+            role="user",
+            content=message
+        )
+        db.add(user_message)
+        
         async with aiohttp.ClientSession() as session:
             headers = {
                 "Authorization": f"Bearer {qwen_token}",
@@ -252,6 +295,17 @@ async def chat_with_qwen(
                 if response.status == 200:
                     result = await response.json()
                     reply = result["choices"][0]["message"]["content"]
+                    
+                    # 保存AI回复
+                    assistant_message = ChatMessage(
+                        execution_id=execution_id,
+                        node_id=execution.current_node,
+                        role="assistant",
+                        content=reply
+                    )
+                    db.add(assistant_message)
+                    db.commit()
+                    
                     return {
                         "reply": reply,
                         "success": True,
@@ -264,4 +318,48 @@ async def chat_with_qwen(
                     raise HTTPException(status_code=500, detail=f"Qwen API error: {error_text}")
                     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+@router.get("/{execution_id}/history")
+async def get_execution_history(execution_id: int, db: Session = Depends(get_db)):
+    """获取执行历史记录"""
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    
+    # 获取执行历史记录，按开始时间排序
+    history_records = db.query(ExecutionHistory).filter(
+        ExecutionHistory.execution_id == execution_id
+    ).order_by(ExecutionHistory.started_at).all()
+    
+    # 转换为响应格式
+    result = []
+    for record in history_records:
+        history_item = {
+            "node_id": record.node_id,
+            "node_type": record.node_type,
+            "node_name": record.node_name,
+            "status": record.status.value,
+            "started_at": record.started_at.isoformat(),
+            "completed_at": record.completed_at.isoformat() if record.completed_at else None,
+            "duration": record.duration,
+            "output": record.output,
+            "error_message": record.error_message,
+            "variables_snapshot": json.loads(record.variables_snapshot) if record.variables_snapshot else {},
+        }
+        
+        # 如果是Agent节点，添加提示词和响应
+        if record.node_type == 'agent' and record.agent_prompt and record.agent_response:
+            history_item["agent_prompt"] = record.agent_prompt
+            history_item["agent_response"] = record.agent_response
+        
+        # 如果是Human Control节点，添加聊天历史
+        if record.node_type == 'human_control' and record.chat_history:
+            history_item["chat_history"] = json.loads(record.chat_history)
+        
+        result.append(history_item)
+    
+    return {
+        "execution_id": execution_id,
+        "history": result
+    } 

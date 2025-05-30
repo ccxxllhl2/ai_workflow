@@ -3,6 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database.database import engine, Base
 from app.api import workflows, agents, execution
 
+# 导入所有模型以确保表被创建
+from app.models.workflow import Workflow
+from app.models.agent import Agent
+from app.models.execution import Execution
+from app.models.variable import Variable
+from app.models.execution_history import ExecutionHistory, ChatMessage
+
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 

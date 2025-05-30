@@ -35,6 +35,12 @@ function App() {
     }
   };
 
+  const handleReturnToEditor = () => {
+    if (selectedWorkflow) {
+      setCurrentView(AppView.EDITOR);
+    }
+  };
+
   const getViewIcon = (view: AppView) => {
     switch (view) {
       case AppView.MANAGER:
@@ -165,6 +171,7 @@ function App() {
         return (
           <ExecutionView
             workflowId={selectedWorkflow?.id}
+            onReturnToEditor={handleReturnToEditor}
           />
         );
       default:

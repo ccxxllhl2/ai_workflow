@@ -54,7 +54,10 @@ class AgentNodeProcessor(BaseNodeProcessor):
                 
                 return {
                     'status': 'success',
-                    'next_node': None  # 由引擎根据边连接查找下一个节点
+                    'next_node': None,  # 由引擎根据边连接查找下一个节点
+                    'prompt': rendered_prompt,
+                    'response': response,
+                    'output': f"Agent executed successfully. Output saved to variable '{output_variable}'"
                 }
             
             # 兼容旧的Agent配置方式
@@ -99,7 +102,10 @@ class AgentNodeProcessor(BaseNodeProcessor):
             
             return {
                 'status': 'success',
-                'next_node': None  # 由引擎根据边连接查找下一个节点
+                'next_node': None,  # 由引擎根据边连接查找下一个节点
+                'prompt': rendered_prompt,
+                'response': response,
+                'output': f"Agent executed successfully. Output saved to variable '{output_variable}'"
             }
             
         except Exception as e:

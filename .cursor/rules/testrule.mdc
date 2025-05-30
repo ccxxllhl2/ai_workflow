@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+编写完代码后不需要运行终端命令进行测试，告诉我如何测试我自己来做。

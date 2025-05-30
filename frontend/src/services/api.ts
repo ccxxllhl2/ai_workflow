@@ -146,6 +146,12 @@ export const executionApi = {
     const response = await api.post(`/executions/${id}/chat`, { message });
     return response.data;
   },
+
+  // Get execution history
+  getExecutionHistory: async (id: number): Promise<{execution_id: number, history: any[]}> => {
+    const response = await api.get(`/executions/${id}/history`);
+    return response.data;
+  },
 };
 
 export default api; 

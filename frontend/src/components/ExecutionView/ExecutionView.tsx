@@ -5,6 +5,7 @@ import HumanFeedback from './HumanFeedback';
 
 interface ExecutionViewProps {
   workflowId?: number;
+  onReturnToEditor?: () => void;
 }
 
 interface FinalOutput {
@@ -13,7 +14,7 @@ interface FinalOutput {
   has_output: boolean;
 }
 
-const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
+const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEditor }) => {
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +23,10 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
   const [loadingFinalOutput, setLoadingFinalOutput] = useState(false);
   const [showHumanFeedback, setShowHumanFeedback] = useState(false);
   const [continueLoading, setContinueLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [executionHistory, setExecutionHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedVariables, setExpandedVariables] = useState<Record<string, boolean>>({});
 
   const loadExecutions = useCallback(async () => {
     if (!workflowId) return;
@@ -52,6 +57,21 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
     }
   }, []);
 
+  const loadExecutionHistory = useCallback(async (executionId: number) => {
+    try {
+      setLoadingHistory(true);
+      const response = await executionApi.getExecutionHistory(executionId);
+      setExecutionHistory(response.history);
+      setExpandedVariables({});
+    } catch (err) {
+      console.error('Failed to load execution history:', err);
+      setExecutionHistory([]);
+      setExpandedVariables({});
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (workflowId) {
       loadExecutions();
@@ -61,8 +81,9 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
   useEffect(() => {
     if (selectedExecution) {
       loadFinalOutput(selectedExecution.id);
+      loadExecutionHistory(selectedExecution.id);
     }
-  }, [selectedExecution, loadFinalOutput]);
+  }, [selectedExecution, loadFinalOutput, loadExecutionHistory]);
 
   const handleExecuteWorkflow = async () => {
     if (!workflowId) return;
@@ -165,6 +186,11 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
       
       // Restart polling
       pollExecutionStatus(selectedExecution.id);
+      
+      // Restart workflow editor polling if available
+      if ((window as any).restartWorkflowPolling) {
+        (window as any).restartWorkflowPolling(selectedExecution.id);
+      }
     } catch (err: any) {
       console.error('Continue execution exception occurred:', err);
       
@@ -272,6 +298,15 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
             <p className="text-gray-600 mt-2">Monitor and manage workflow execution status</p>
           </div>
           <div className="flex space-x-3">
+            {onReturnToEditor && (
+              <button
+                onClick={onReturnToEditor}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center space-x-2"
+              >
+                <span>📋</span>
+                <span>Back to Workflow</span>
+              </button>
+            )}
             <button
               onClick={handleExecuteWorkflow}
               className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center space-x-2"
@@ -506,6 +541,166 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
                   </div>
                 </div>
 
+                {/* Workflow History Card */}
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  <div 
+                    className="p-6 bg-gradient-to-r from-purple-500 to-violet-600 text-white cursor-pointer"
+                    onClick={() => setShowHistory(!showHistory)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-xl font-bold flex items-center space-x-2">
+                        <span>📜</span>
+                        <span>Workflow Execution History</span>
+                      </h2>
+                      <svg 
+                        className={`w-6 h-6 transform transition-transform duration-200 ${showHistory ? 'rotate-180' : ''}`}
+                        fill="currentColor" 
+                        viewBox="0 0 20 20"
+                      >
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"/>
+                      </svg>
+                    </div>
+                  </div>
+                  {showHistory && (
+                    <div className="p-6">
+                      {loadingHistory ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin text-4xl mb-4">⚡</div>
+                          <p className="text-gray-600">Loading execution history...</p>
+                        </div>
+                      ) : executionHistory.length > 0 ? (
+                        <div className="space-y-4">
+                          {executionHistory.map((historyItem, index) => (
+                            <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center space-x-3">
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    historyItem.status === 'completed' ? 'bg-green-500' :
+                                    historyItem.status === 'paused' ? 'bg-yellow-500' :
+                                    historyItem.status === 'failed' ? 'bg-red-500' : 'bg-gray-500'
+                                  }`}></div>
+                                  <span className="font-semibold text-gray-800">
+                                    {historyItem.node_name || historyItem.node_id} ({historyItem.node_type})
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                                  <span>{formatDate(historyItem.started_at)}</span>
+                                  {historyItem.duration && historyItem.duration > 0 && (
+                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                      {historyItem.duration.toFixed(1)}s
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Variables Snapshot */}
+                              {historyItem.variables_snapshot && Object.keys(historyItem.variables_snapshot).length > 0 && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">Variables at execution time:</div>
+                                  <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                                    <div className="space-y-2">
+                                      {Object.entries(historyItem.variables_snapshot).map(([key, value]) => {
+                                        const valueString = typeof value === 'string' ? value : JSON.stringify(value);
+                                        const isLongContent = valueString.length > 100;
+                                        
+                                        return (
+                                          <div key={key} className="bg-white p-2 rounded border border-blue-200">
+                                            <div className="flex items-center justify-between mb-1">
+                                              <span className="font-medium text-blue-800 text-sm">{key}:</span>
+                                              {isLongContent && (
+                                                <button
+                                                  onClick={() => setExpandedVariables(prev => ({ 
+                                                    ...prev, 
+                                                    [`${index}-${key}`]: !prev[`${index}-${key}`] 
+                                                  }))}
+                                                  className="text-xs text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded transition-colors"
+                                                >
+                                                  {expandedVariables[`${index}-${key}`] ? 'Collapse' : 'Expand'}
+                                                </button>
+                                              )}
+                                            </div>
+                                            <div className="text-blue-600 text-sm font-mono break-words">
+                                              {isLongContent && !expandedVariables[`${index}-${key}`] 
+                                                ? `${valueString.substring(0, 100)}...` 
+                                                : valueString
+                                              }
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Agent Conversation */}
+                              {historyItem.node_type === 'agent' && historyItem.agent_prompt && historyItem.agent_response && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">AI Agent Conversation:</div>
+                                  <div className="space-y-3">
+                                    {/* User Prompt */}
+                                    <div className="flex justify-end">
+                                      <div className="max-w-xs lg:max-w-md bg-blue-500 text-white rounded-lg px-4 py-2">
+                                        <div className="text-xs text-blue-100 mb-1">Prompt Input</div>
+                                        <div className="text-sm">{historyItem.agent_prompt}</div>
+                                      </div>
+                                    </div>
+                                    {/* AI Response */}
+                                    <div className="flex justify-start">
+                                      <div className="max-w-xs lg:max-w-md bg-gray-200 text-gray-800 rounded-lg px-4 py-2">
+                                        <div className="text-xs text-gray-600 mb-1">AI Response</div>
+                                        <div className="text-sm">{historyItem.agent_response}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Human Control Chat History */}
+                              {historyItem.node_type === 'human_control' && historyItem.chat_history && historyItem.chat_history.length > 0 && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium text-gray-700 mb-2">Human-AI Chat History:</div>
+                                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                                    {historyItem.chat_history.map((chat: any, chatIndex: number) => (
+                                      <div key={chatIndex} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-xs lg:max-w-md rounded-lg px-3 py-2 ${
+                                          chat.role === 'user' 
+                                            ? 'bg-blue-500 text-white' 
+                                            : 'bg-gray-200 text-gray-800'
+                                        }`}>
+                                          <div className={`text-xs mb-1 ${
+                                            chat.role === 'user' ? 'text-blue-100' : 'text-gray-600'
+                                          }`}>
+                                            {chat.role === 'user' ? 'You' : 'AI Assistant'} - {formatDate(chat.timestamp)}
+                                          </div>
+                                          <div className="text-sm">{chat.content}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Regular Output */}
+                              <div className="bg-white p-3 rounded border border-gray-200">
+                                <div className="text-sm font-medium text-gray-700 mb-1">Output:</div>
+                                <div className="text-sm text-gray-600 font-mono">
+                                  {historyItem.output || historyItem.error_message || 'No output'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <div className="text-4xl mb-4">📋</div>
+                          <p>No execution history available</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Execution Variables Card */}
                 {selectedExecution.variables && (
                   <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -560,6 +755,7 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId }) => {
           onContinue={handleContinueExecution}
           onClose={() => setShowHumanFeedback(false)}
           loading={continueLoading}
+          currentNodeName={selectedExecution.current_node || "Human Control"}
         />
       )}
     </div>

@@ -26,4 +26,5 @@ class Execution(Base):
     
     # 关联关系
     workflow = relationship("Workflow", back_populates="executions")
-    variables_records = relationship("Variable", back_populates="execution", cascade="all, delete-orphan") 
+    variables_records = relationship("Variable", back_populates="execution", cascade="all, delete-orphan")
+    history_records = relationship("ExecutionHistory", back_populates="execution", cascade="all, delete-orphan") 

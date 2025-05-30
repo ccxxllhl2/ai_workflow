@@ -54,6 +54,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
   
   // Use useRef to maintain node ID counter
   const nodeIdCounter = useRef(0);
+  // Store polling interval ref to control polling
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use useMemo to calculate variable list and avoid unnecessary recalculation
   const variables = useMemo(() => {
@@ -76,6 +78,15 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
       }
     }
   }, [workflow, setNodes, setEdges]);
+
+  // Clean up polling on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
 
   const onConnect: OnConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -247,7 +258,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
   };
 
   const pollExecutionStatus = async (executionId: number) => {
-    const pollInterval = setInterval(async () => {
+    // Clear existing polling if any
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingIntervalRef.current = setInterval(async () => {
       try {
         const execution = await executionApi.getExecution(executionId);
         setExecutionStatus(execution.status);
@@ -259,17 +275,28 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
             ...node,
             style: {
               ...node.style,
-              backgroundColor: node.id === execution.current_node ? '#fbbf24' : undefined,
-              borderColor: node.id === execution.current_node ? '#f59e0b' : undefined,
+              backgroundColor: node.id === execution.current_node 
+                ? (execution.status === ExecutionStatus.PAUSED ? '#fb923c' : '#fbbf24') 
+                : undefined,
+              borderColor: node.id === execution.current_node 
+                ? (execution.status === ExecutionStatus.PAUSED ? '#ea580c' : '#f59e0b') 
+                : undefined,
               borderWidth: node.id === execution.current_node ? 2 : undefined,
+              // Add pulsing animation for paused state
+              animation: node.id === execution.current_node && execution.status === ExecutionStatus.PAUSED 
+                ? 'pulse 2s infinite' 
+                : undefined,
             },
           }))
         );
 
-        // If execution completed, stop polling
+        // If execution completed or failed, stop polling and reset styles
         if (execution.status === ExecutionStatus.COMPLETED || 
             execution.status === ExecutionStatus.FAILED) {
-          clearInterval(pollInterval);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
           setExecutingNodeId(null);
           
           // Reset node styles
@@ -280,19 +307,41 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
                 backgroundColor: undefined,
                 borderColor: undefined,
                 borderWidth: undefined,
+                animation: undefined,
               },
             }))
           );
         }
       } catch (err) {
         console.error('Failed to get execution status:', err);
-        clearInterval(pollInterval);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
       }
     }, 1000);
 
-    // Stop polling after 30 seconds
-    setTimeout(() => clearInterval(pollInterval), 30000);
+    // Stop polling after 5 minutes (extended from 30 seconds for human feedback scenarios)
+    setTimeout(() => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    }, 300000);
   };
+
+  // Method to restart polling (can be called when execution continues)
+  const restartPolling = (executionId: number) => {
+    pollExecutionStatus(executionId);
+  };
+
+  // Expose restart polling method globally for human feedback continue
+  useEffect(() => {
+    (window as any).restartWorkflowPolling = restartPolling;
+    return () => {
+      delete (window as any).restartWorkflowPolling;
+    };
+  }, []);
 
   const getExecutionStatusColor = (status: ExecutionStatus | null) => {
     if (!status) return 'bg-gray-500';
