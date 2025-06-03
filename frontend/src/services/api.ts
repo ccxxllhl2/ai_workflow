@@ -18,11 +18,44 @@ const api = axios.create({
   },
 });
 
+// User types
+export interface User {
+  id: number;
+  username: string;
+  created_at: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface WorkflowRating {
+  id: number;
+  user_id: number;
+  workflow_id: number;
+  is_liked: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowWithRating extends Workflow {
+  user_rating: boolean | null;
+  like_count: number;
+  dislike_count: number;
+}
+
 // Workflow API
 export const workflowApi = {
-  // Get workflow list
-  getWorkflows: async (skip = 0, limit = 100): Promise<Workflow[]> => {
-    const response = await api.get(`/workflows?skip=${skip}&limit=${limit}`);
+  // Get workflow list with ratings
+  getWorkflows: async (skip = 0, limit = 100, userId?: number): Promise<WorkflowWithRating[]> => {
+    const params = new URLSearchParams();
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    if (userId) {
+      params.append('user_id', userId.toString());
+    }
+    const response = await api.get(`/workflows?${params.toString()}`);
     return response.data;
   },
 
@@ -32,9 +65,13 @@ export const workflowApi = {
     return response.data;
   },
 
-  // Get workflow details
-  getWorkflow: async (id: number): Promise<Workflow> => {
-    const response = await api.get(`/workflows/${id}`);
+  // Get workflow details with ratings
+  getWorkflow: async (id: number, userId?: number): Promise<WorkflowWithRating> => {
+    const params = new URLSearchParams();
+    if (userId) {
+      params.append('user_id', userId.toString());
+    }
+    const response = await api.get(`/workflows/${id}?${params.toString()}`);
     return response.data;
   },
 
@@ -52,6 +89,56 @@ export const workflowApi = {
   // Execute workflow - Fixed: use executions router
   executeWorkflow: async (id: number, data: ExecuteWorkflowRequest): Promise<Execution> => {
     const response = await api.post(`/executions/${id}/execute`, data);
+    return response.data;
+  },
+
+  // Export workflow as JSON
+  exportWorkflow: async (id: number): Promise<any> => {
+    const response = await api.get(`/workflows/${id}/export`);
+    return response.data;
+  },
+
+  // Download workflow as JSON file
+  downloadWorkflow: async (id: number): Promise<void> => {
+    const response = await api.get(`/workflows/${id}/export/download`, {
+      responseType: 'blob',
+    });
+    
+    // Get filename from Content-Disposition header
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = 'workflow.json';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename=(.+)/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+    
+    // Create download link
+    const blob = new Blob([response.data], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  // Import workflow from JSON
+  importWorkflow: async (workflowData: any, name?: string, description?: string): Promise<{
+    success: boolean;
+    message: string;
+    workflow_id?: number;
+    workflow?: Workflow;
+  }> => {
+    const importRequest = {
+      name,
+      description,
+      workflow_data: workflowData,
+    };
+    const response = await api.post('/workflows/import', importRequest);
     return response.data;
   },
 };
@@ -150,6 +237,61 @@ export const executionApi = {
   // Get execution history
   getExecutionHistory: async (id: number): Promise<{execution_id: number, history: any[]}> => {
     const response = await api.get(`/executions/${id}/history`);
+    return response.data;
+  },
+};
+
+// Authentication API
+export const authApi = {
+  // User login
+  login: async (data: LoginRequest): Promise<User> => {
+    const response = await api.post('/auth/login', data);
+    return response.data;
+  },
+
+  // Get all users (for testing)
+  getUsers: async (): Promise<User[]> => {
+    const response = await api.get('/auth/users');
+    return response.data;
+  },
+
+  // Get user by ID
+  getUser: async (id: number): Promise<User> => {
+    const response = await api.get(`/auth/users/${id}`);
+    return response.data;
+  },
+};
+
+// Rating API
+export const ratingApi = {
+  // Create or update rating
+  createOrUpdateRating: async (
+    userId: number,
+    workflowId: number,
+    isLiked: boolean | null
+  ): Promise<WorkflowRating> => {
+    const response = await api.post(`/ratings/?user_id=${userId}`, {
+      workflow_id: workflowId,
+      is_liked: isLiked,
+    });
+    return response.data;
+  },
+
+  // Get workflow rating stats
+  getWorkflowRatingStats: async (workflowId: number): Promise<{
+    workflow_id: number;
+    like_count: number;
+    dislike_count: number;
+  }> => {
+    const response = await api.get(`/ratings/workflow/${workflowId}/stats`);
+    return response.data;
+  },
+
+  // Get user rating for workflow
+  getUserRating: async (userId: number, workflowId: number): Promise<{
+    is_liked: boolean | null;
+  }> => {
+    const response = await api.get(`/ratings/user/${userId}/workflow/${workflowId}`);
     return response.data;
   },
 };

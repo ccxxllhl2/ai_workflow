@@ -1,33 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Workflow, WorkflowStatus } from '../../types/workflow';
-import { workflowApi } from '../../services/api';
+import { workflowApi, ratingApi, WorkflowWithRating } from '../../services/api';
 
 interface WorkflowManagerProps {
   onSelectWorkflow: (workflow: Workflow) => void;
   onCreateNewWorkflow: () => void;
+  currentUser?: { id: number; username: string } | null;
 }
 
 const WorkflowManager: React.FC<WorkflowManagerProps> = ({ 
   onSelectWorkflow, 
-  onCreateNewWorkflow 
+  onCreateNewWorkflow,
+  currentUser
 }) => {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowWithRating[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
-  const [likedWorkflows, setLikedWorkflows] = useState<Set<number>>(new Set());
-  const [dislikedWorkflows, setDislikedWorkflows] = useState<Set<number>>(new Set());
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importName, setImportName] = useState('');
+  const [importDescription, setImportDescription] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadWorkflows();
-  }, []);
+  }, [currentUser]);
 
   const loadWorkflows = async () => {
     try {
       setLoading(true);
-      const data = await workflowApi.getWorkflows();
+      const data = await workflowApi.getWorkflows(0, 100, currentUser?.id);
       setWorkflows(data);
       setError(null);
     } catch (err) {
@@ -63,7 +69,8 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
         config: JSON.stringify(defaultConfig)
       });
 
-      setWorkflows([...workflows, newWorkflow]);
+      // Reload workflows to get the updated list with ratings
+      await loadWorkflows();
       setShowCreateDialog(false);
       setNewWorkflowName('');
       setNewWorkflowDescription('');
@@ -88,40 +95,176 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
     }
   };
 
-  const handleLikeWorkflow = (id: number, e: React.MouseEvent) => {
+  const handleExportWorkflow = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setLikedWorkflows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-        setDislikedWorkflows(prevDisliked => {
-          const newDislikedSet = new Set(prevDisliked);
-          newDislikedSet.delete(id);
-          return newDislikedSet;
-        });
-      }
-      return newSet;
-    });
+    
+    try {
+      await workflowApi.downloadWorkflow(id);
+    } catch (err) {
+      alert('Failed to export workflow');
+      console.error('Failed to export workflow:', err);
+    }
   };
 
-  const handleDislikeWorkflow = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDislikedWorkflows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-        setLikedWorkflows(prevLiked => {
-          const newLikedSet = new Set(prevLiked);
-          newLikedSet.delete(id);
-          return newLikedSet;
-        });
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/json') {
+        alert('Please select a JSON file');
+        return;
       }
-      return newSet;
-    });
+      setImportFile(file);
+    }
+  };
+
+  const handleImportWorkflow = async () => {
+    if (!importFile) {
+      alert('Please select a file to import');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const fileContent = await importFile.text();
+      const workflowData = JSON.parse(fileContent);
+      
+      // Validate the imported data structure
+      if (!workflowData.config || !workflowData.name) {
+        throw new Error('Invalid workflow file format');
+      }
+
+      const result = await workflowApi.importWorkflow(
+        workflowData,
+        importName.trim() || undefined,
+        importDescription.trim() || undefined
+      );
+
+      if (result.success) {
+        alert(`Workflow imported successfully: ${result.message}`);
+        await loadWorkflows();
+        setShowImportDialog(false);
+        setImportFile(null);
+        setImportName('');
+        setImportDescription('');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+        // Select the imported workflow if available
+        if (result.workflow) {
+          onSelectWorkflow(result.workflow);
+        }
+      } else {
+        alert(`Import failed: ${result.message}`);
+      }
+    } catch (err) {
+      alert(`Failed to import workflow: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Failed to import workflow:', err);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleLikeWorkflow = async (workflowId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!currentUser) {
+      alert('Please login to rate workflows');
+      return;
+    }
+
+    try {
+      const workflow = workflows.find(w => w.id === workflowId);
+      if (!workflow) return;
+
+      // Toggle like: if already liked, remove rating; otherwise set to liked
+      const newRating = workflow.user_rating === true ? null : true;
+      
+      await ratingApi.createOrUpdateRating(currentUser.id, workflowId, newRating);
+      
+      // Update local state
+      setWorkflows(prevWorkflows => 
+        prevWorkflows.map(w => {
+          if (w.id === workflowId) {
+            const updatedWorkflow = { ...w };
+            
+            // Update user rating
+            const oldRating = w.user_rating;
+            updatedWorkflow.user_rating = newRating;
+            
+            // Update counts
+            if (oldRating === true && newRating === null) {
+              // Remove like
+              updatedWorkflow.like_count = Math.max(0, w.like_count - 1);
+            } else if (oldRating === false && newRating === true) {
+              // Change from dislike to like
+              updatedWorkflow.like_count = w.like_count + 1;
+              updatedWorkflow.dislike_count = Math.max(0, w.dislike_count - 1);
+            } else if (oldRating === null && newRating === true) {
+              // Add like
+              updatedWorkflow.like_count = w.like_count + 1;
+            }
+            
+            return updatedWorkflow;
+          }
+          return w;
+        })
+      );
+    } catch (err) {
+      console.error('Failed to update rating:', err);
+      alert('Failed to update rating');
+    }
+  };
+
+  const handleDislikeWorkflow = async (workflowId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!currentUser) {
+      alert('Please login to rate workflows');
+      return;
+    }
+
+    try {
+      const workflow = workflows.find(w => w.id === workflowId);
+      if (!workflow) return;
+
+      // Toggle dislike: if already disliked, remove rating; otherwise set to disliked
+      const newRating = workflow.user_rating === false ? null : false;
+      
+      await ratingApi.createOrUpdateRating(currentUser.id, workflowId, newRating);
+      
+      // Update local state
+      setWorkflows(prevWorkflows => 
+        prevWorkflows.map(w => {
+          if (w.id === workflowId) {
+            const updatedWorkflow = { ...w };
+            
+            // Update user rating
+            const oldRating = w.user_rating;
+            updatedWorkflow.user_rating = newRating;
+            
+            // Update counts
+            if (oldRating === false && newRating === null) {
+              // Remove dislike
+              updatedWorkflow.dislike_count = Math.max(0, w.dislike_count - 1);
+            } else if (oldRating === true && newRating === false) {
+              // Change from like to dislike
+              updatedWorkflow.dislike_count = w.dislike_count + 1;
+              updatedWorkflow.like_count = Math.max(0, w.like_count - 1);
+            } else if (oldRating === null && newRating === false) {
+              // Add dislike
+              updatedWorkflow.dislike_count = w.dislike_count + 1;
+            }
+            
+            return updatedWorkflow;
+          }
+          return w;
+        })
+      );
+    } catch (err) {
+      console.error('Failed to update rating:', err);
+      alert('Failed to update rating');
+    }
   };
 
   const getStatusColor = (status: WorkflowStatus) => {
@@ -131,7 +274,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
       case WorkflowStatus.DRAFT:
         return 'bg-gray-50 text-gray-700 border-gray-200';
       case WorkflowStatus.ARCHIVED:
-        return 'bg-red-50 text-red-700 border-red-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200';
       default:
         return 'bg-gray-50 text-gray-700 border-gray-200';
     }
@@ -146,7 +289,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
       case WorkflowStatus.ARCHIVED:
         return 'Archived';
       default:
-        return status;
+        return 'Unknown';
     }
   };
 
@@ -179,6 +322,9 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Workflow Management</h1>
             <p className="text-gray-600">Create and manage your AI workflows</p>
+            {currentUser && (
+              <p className="text-sm text-gray-500 mt-1">Logged in as: {currentUser.username}</p>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -189,6 +335,15 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Refresh
+            </button>
+            <button
+              onClick={() => setShowImportDialog(true)}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Import
             </button>
             <button
               onClick={() => setShowCreateDialog(true)}
@@ -252,6 +407,15 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
                 
                 <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
+                    onClick={(e) => handleExportWorkflow(workflow.id, e)}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Export workflow"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </button>
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectWorkflow(workflow);
@@ -295,34 +459,53 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
                 </div>
               </div>
               
-              {/* Like and dislike buttons */}
-              <div className="flex items-center justify-end space-x-2 mt-4 pt-3 border-t border-gray-100">
-                <button
-                  onClick={(e) => handleLikeWorkflow(workflow.id, e)}
-                  className={`p-2 rounded-lg transition-all duration-200 ${
-                    likedWorkflows.has(workflow.id)
-                      ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                      : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                  }`}
-                  title="Like this workflow"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => handleDislikeWorkflow(workflow.id, e)}
-                  className={`p-2 rounded-lg transition-all duration-200 ${
-                    dislikedWorkflows.has(workflow.id)
-                      ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                      : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                  }`}
-                  title="Dislike this workflow"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(180deg)' }}>
-                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                  </svg>
-                </button>
+              {/* Like and dislike buttons with counts */}
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div className="flex items-center space-x-4 text-xs text-gray-500">
+                  <span className="flex items-center">
+                    <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
+                    </svg>
+                    {workflow.like_count}
+                  </span>
+                  <span className="flex items-center">
+                    <svg className="w-3 h-3 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(180deg)' }}>
+                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
+                    </svg>
+                    {workflow.dislike_count}
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={(e) => handleLikeWorkflow(workflow.id, e)}
+                    disabled={!currentUser}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      workflow.user_rating === true
+                        ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                        : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                    } ${!currentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={currentUser ? "Like this workflow" : "Login to rate workflows"}
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => handleDislikeWorkflow(workflow.id, e)}
+                    disabled={!currentUser}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      workflow.user_rating === false
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                    } ${!currentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={currentUser ? "Dislike this workflow" : "Login to rate workflows"}
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(180deg)' }}>
+                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -384,6 +567,93 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
                 className="px-4 py-2 text-sm font-medium text-white bg-gray-900 border border-transparent rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Create Workflow
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Workflow Dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Import Workflow</h2>
+              <p className="text-sm text-gray-600 mt-1">Import a workflow from JSON file</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Select JSON File <span className="text-red-500">*</span>
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportFile}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                />
+                {importFile && (
+                  <p className="text-sm text-gray-600 mt-1">Selected: {importFile.name}</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Custom Name <span className="text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={importName}
+                  onChange={(e) => setImportName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                  placeholder="Override workflow name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Custom Description <span className="text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  value={importDescription}
+                  onChange={(e) => setImportDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none"
+                  rows={3}
+                  placeholder="Override workflow description"
+                />
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setImportFile(null);
+                  setImportName('');
+                  setImportDescription('');
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportWorkflow}
+                disabled={!importFile || importing}
+                className="px-4 py-2 text-sm font-medium text-white bg-gray-900 border border-transparent rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {importing ? (
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Importing...
+                  </div>
+                ) : (
+                  'Import Workflow'
+                )}
               </button>
             </div>
           </div>
