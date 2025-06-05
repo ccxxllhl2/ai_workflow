@@ -299,14 +299,14 @@ const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
                     {isCurrentNode && executionStatus === ExecutionStatus.RUNNING && (
                       <div className="mt-2 flex items-center justify-center space-x-1">
                         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-blue-600 font-medium">执行中</span>
+                        <span className="text-xs text-blue-600 font-medium">Running</span>
                       </div>
                     )}
 
                     {isCurrentNode && executionStatus === ExecutionStatus.PAUSED && (
                       <div className="mt-2 flex items-center justify-center space-x-1">
                         <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                        <span className="text-xs text-orange-600 font-medium">等待中</span>
+                        <span className="text-xs text-orange-600 font-medium">Waiting</span>
                       </div>
                     )}
 

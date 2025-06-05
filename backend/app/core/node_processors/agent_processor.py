@@ -4,6 +4,7 @@ import os
 import aiohttp
 from typing import Dict, Any
 from sqlalchemy.orm import Session
+from openai import AsyncOpenAI
 from app.core.node_processors.base_processor import BaseNodeProcessor
 from app.core.variable_manager import VariableManager
 from app.models.agent import Agent
@@ -27,38 +28,45 @@ class AgentNodeProcessor(BaseNodeProcessor):
             
             # 检查是否直接配置了模型类型（新的配置方式）
             model_type = node_config.get('modelType')
+            prompt_template = node_config.get('prompt', '')
+            if not prompt_template:
+                return {
+                    'status': 'error',
+                    'error': 'No prompt specified in node configuration'
+                }
+            
+            # 使用Jinja2渲染提示词
+            rendered_prompt = await variable_manager.render_template(execution_id, prompt_template)
+            
             if model_type == 'qwen':
-                # 直接使用节点配置的千问模型
-                prompt_template = node_config.get('prompt', '')
-                if not prompt_template:
-                    return {
-                        'status': 'error',
-                        'error': 'No prompt specified in node configuration'
-                    }
-                
-                # 使用Jinja2渲染提示词
-                rendered_prompt = await variable_manager.render_template(execution_id, prompt_template)
-                
                 # 调用千问API
                 response = await self._call_qwen_api(rendered_prompt, node_config.get('modelName', 'qwen-turbo'))
-                
-                # 保存响应为变量
-                output_variable = node_config.get('outputVariable', f"{node['id']}_output")
-                await variable_manager.set_variable(
-                    execution_id, 
-                    output_variable, 
-                    response, 
-                    variable_manager._infer_type(response),
-                    node['id']
-                )
-                
+            elif model_type == 'openai':
+                # 调用OpenAI API
+                response = await self._call_openai_api(rendered_prompt, node_config.get('modelName', 'gpt-3.5-turbo'))
+            else:
                 return {
-                    'status': 'success',
-                    'next_node': None,  # 由引擎根据边连接查找下一个节点
-                    'prompt': rendered_prompt,
-                    'response': response,
-                    'output': f"Agent executed successfully. Output saved to variable '{output_variable}'"
+                    'status': 'error',
+                    'error': f'Unsupported model type: {model_type}'
                 }
+            
+            # 保存响应为变量
+            output_variable = node_config.get('outputVariable', f"{node['id']}_output")
+            await variable_manager.set_variable(
+                execution_id, 
+                output_variable, 
+                response, 
+                variable_manager._infer_type(response),
+                node['id']
+            )
+            
+            return {
+                'status': 'success',
+                'next_node': None,  # 由引擎根据边连接查找下一个节点
+                'prompt': rendered_prompt,
+                'response': response,
+                'output': f"Agent executed successfully. Output saved to variable '{output_variable}'"
+            }
             
             # 兼容旧的Agent配置方式
             agent_id = node_config.get('agent_id')
@@ -159,6 +167,36 @@ class AgentNodeProcessor(BaseNodeProcessor):
                         
         except Exception as e:
             return f"[千问API调用失败] {str(e)}"
+    
+    async def _call_openai_api(self, prompt: str, model_name: str = 'gpt-3.5-turbo') -> str:
+        """调用OpenAI API"""
+        try:
+            # 从环境变量获取API Key
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            if not openai_api_key:
+                return "[错误] 未配置OPENAI_API_KEY环境变量"
+            
+            # 创建OpenAI客户端
+            client = AsyncOpenAI(api_key=openai_api_key)
+            
+            # 调用OpenAI API
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                timeout=30.0
+            )
+            
+            return response.choices[0].message.content or "[OpenAI返回空响应]"
+            
+        except Exception as e:
+            return f"[OpenAI API调用失败] {str(e)}"
     
     async def _call_llm(self, agent: Agent, prompt: str) -> str:
         """调用LLM (兼容旧的Agent配置)"""

@@ -72,10 +72,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </label>
         <select
           value={config.modelType || 'qwen'}
-          onChange={(e) => setConfig({ ...config, modelType: e.target.value, modelName: e.target.value === 'qwen' ? 'qwen-turbo' : '' })}
+          onChange={(e) => {
+            const newType = e.target.value;
+            const defaultModelName = newType === 'qwen' ? 'qwen-turbo' : 
+                                   newType === 'openai' ? 'gpt-3.5-turbo' : '';
+            setConfig({ ...config, modelType: newType, modelName: defaultModelName });
+          }}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="qwen">Qwen Large Model</option>
+          <option value="openai">OpenAI ChatGPT</option>
           <option value="agent">Use Configured Agent</option>
         </select>
       </div>
@@ -118,6 +124,29 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           />
           <div className="text-xs text-gray-500 mt-1">
             Using Qwen large model, requires QwenToken environment variable configuration
+          </div>
+        </div>
+      )}
+
+      {config.modelType === 'openai' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            OpenAI Model
+          </label>
+          <select
+            value={config.modelName || 'gpt-3.5-turbo'}
+            onChange={(e) => setConfig({ ...config, modelName: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+            <option value="gpt-3.5-turbo-16k">GPT-3.5 Turbo 16K</option>
+            <option value="gpt-4">GPT-4</option>
+            <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o Mini</option>
+          </select>
+          <div className="text-xs text-gray-500 mt-1">
+            Using OpenAI ChatGPT models, requires OPENAI_API_KEY environment variable configuration
           </div>
         </div>
       )}
