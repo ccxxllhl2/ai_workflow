@@ -7,6 +7,7 @@ interface HumanFeedbackProps {
   onClose: () => void;
   loading?: boolean;
   currentNodeName?: string;
+  humanInterventionDescription?: string;
 }
 
 interface ChatMessage {
@@ -96,7 +97,8 @@ const HumanFeedback: React.FC<HumanFeedbackProps> = ({
   onContinue, 
   onClose, 
   loading: continueLoading = false, 
-  currentNodeName = "Human Control"
+  currentNodeName = "Human Control",
+  humanInterventionDescription = "Workflow paused, waiting for human intervention"
 }) => {
   const [variables, setVariables] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
@@ -144,9 +146,15 @@ const HumanFeedback: React.FC<HumanFeedbackProps> = ({
   };
 
   const handleContinueExecution = async () => {
-    await onContinue(variables);
-    // Close the modal after continuing
-    onClose();
+    try {
+      await onContinue(variables);
+      // The parent component (ExecutionView) will handle closing the modal
+      // through setShowHumanFeedback(false) in handleContinueExecution
+    } catch (error) {
+      // If there's an error, we should still close the modal to allow user to see the error
+      console.error('Error continuing execution:', error);
+      onClose();
+    }
   };
 
   const handleSendMessage = async () => {
@@ -237,7 +245,7 @@ const HumanFeedback: React.FC<HumanFeedbackProps> = ({
                 <span>⏸️</span>
                 <span>{currentNodeName}</span>
               </h2>
-              <p className="text-orange-100 mt-2 text-lg">Workflow paused, waiting for human intervention</p>
+              <p className="text-orange-100 mt-2 text-lg">{humanInterventionDescription}</p>
             </div>
             <button
               onClick={onClose}

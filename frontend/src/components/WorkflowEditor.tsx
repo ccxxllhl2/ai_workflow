@@ -236,7 +236,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
 
   const executeWorkflow = async () => {
     if (!workflow) {
-      alert('Please select a workflow first');
+      alert('Please select or create a workflow first');
       return;
     }
 
@@ -251,6 +251,11 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
       
       // Start polling execution status
       pollExecutionStatus(execution.id);
+      
+      // Auto switch to Execution Manager page
+      if (onViewExecution) {
+        onViewExecution();
+      }
     } catch (err) {
       alert('Failed to start execution');
       console.error('Failed to start execution:', err);
@@ -269,28 +274,10 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         setExecutionStatus(execution.status);
         setExecutingNodeId(execution.current_node || null);
 
-        // Update node styles to show execution status
-        setNodes((nds) =>
-          nds.map((node) => ({
-            ...node,
-            style: {
-              ...node.style,
-              backgroundColor: node.id === execution.current_node 
-                ? (execution.status === ExecutionStatus.PAUSED ? '#fb923c' : '#fbbf24') 
-                : undefined,
-              borderColor: node.id === execution.current_node 
-                ? (execution.status === ExecutionStatus.PAUSED ? '#ea580c' : '#f59e0b') 
-                : undefined,
-              borderWidth: node.id === execution.current_node ? 2 : undefined,
-              // Add pulsing animation for paused state
-              animation: node.id === execution.current_node && execution.status === ExecutionStatus.PAUSED 
-                ? 'pulse 2s infinite' 
-                : undefined,
-            },
-          }))
-        );
+        // Node styles are now handled by NodeExecutionList component
+        // No need to update node styles here anymore
 
-        // If execution completed or failed, stop polling and reset styles
+        // If execution completed or failed, stop polling
         if (execution.status === ExecutionStatus.COMPLETED || 
             execution.status === ExecutionStatus.FAILED) {
           if (pollingIntervalRef.current) {
@@ -298,19 +285,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
             pollingIntervalRef.current = null;
           }
           setExecutingNodeId(null);
-          
-          // Reset node styles
-          setNodes((nds) =>
-            nds.map((node) => ({
-              ...node,
-              style: {
-                backgroundColor: undefined,
-                borderColor: undefined,
-                borderWidth: undefined,
-                animation: undefined,
-              },
-            }))
-          );
+          // Node styles are handled by NodeExecutionList component
         }
       } catch (err) {
         console.error('Failed to get execution status:', err);

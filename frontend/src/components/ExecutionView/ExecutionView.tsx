@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Execution, ExecutionStatus } from '../../types/workflow';
 import { executionApi } from '../../services/api';
 import HumanFeedback from './HumanFeedback';
+import NodeExecutionList from './NodeExecutionList';
 
 interface ExecutionViewProps {
   workflowId?: number;
@@ -27,6 +28,8 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [expandedVariables, setExpandedVariables] = useState<Record<string, boolean>>({});
+  const [currentPollingId, setCurrentPollingId] = useState<number | null>(null);
+  const [lastHistoryUpdateTime, setLastHistoryUpdateTime] = useState<number>(0);
 
   const loadExecutions = useCallback(async () => {
     if (!workflowId) return;
@@ -36,18 +39,26 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
       const data = await executionApi.getExecutions(workflowId);
       setExecutions(data);
       setError(null);
+      
+      // Auto-select the latest execution record if no execution is currently selected
+      if (data.length > 0 && !selectedExecution) {
+        const latestExecution = data[0]; // Executions are ordered by creation time desc
+        setSelectedExecution(latestExecution);
+      }
     } catch (err) {
       setError('Failed to load execution records');
       console.error('Failed to load execution records:', err);
     } finally {
       setLoading(false);
     }
-  }, [workflowId]);
+  }, [workflowId, selectedExecution]);
 
   const loadFinalOutput = useCallback(async (executionId: number) => {
     try {
       setLoadingFinalOutput(true);
+      console.log('Loading final output for execution:', executionId);
       const output = await executionApi.getFinalOutput(executionId);
+      console.log('Final output loaded:', output);
       setFinalOutput(output);
     } catch (err) {
       console.error('Failed to load final output:', err);
@@ -57,12 +68,19 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
     }
   }, []);
 
-  const loadExecutionHistory = useCallback(async (executionId: number) => {
+  const loadExecutionHistory = useCallback(async (executionId: number, forceUpdate = false) => {
+    // Prevent frequent updates unless forced (e.g., from manual refresh)
+    const now = Date.now();
+    if (!forceUpdate && now - lastHistoryUpdateTime < 2000) {
+      return; // Skip if last update was less than 2 seconds ago
+    }
+    
     try {
       setLoadingHistory(true);
       const response = await executionApi.getExecutionHistory(executionId);
       setExecutionHistory(response.history);
       setExpandedVariables({});
+      setLastHistoryUpdateTime(now);
     } catch (err) {
       console.error('Failed to load execution history:', err);
       setExecutionHistory([]);
@@ -70,7 +88,7 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
     } finally {
       setLoadingHistory(false);
     }
-  }, []);
+  }, [lastHistoryUpdateTime]);
 
   useEffect(() => {
     if (workflowId) {
@@ -78,12 +96,32 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
     }
   }, [workflowId, loadExecutions]);
 
+  // Add a refresh trigger for when switching to execution view
+  useEffect(() => {
+    // Force refresh executions when component mounts or workflowId changes
+    // This ensures we get the latest execution records when switching from Editor
+    if (workflowId) {
+      const timer = setTimeout(() => {
+        loadExecutions();
+      }, 100); // Small delay to ensure smooth transition
+      
+      return () => clearTimeout(timer);
+    }
+  }, [workflowId]);
+
+  // Track the last execution ID to avoid unnecessary reloads
+  const [lastExecutionId, setLastExecutionId] = useState<number | null>(null);
+
   useEffect(() => {
     if (selectedExecution) {
-      loadFinalOutput(selectedExecution.id);
-      loadExecutionHistory(selectedExecution.id);
+      // Only force reload if the execution ID actually changed
+      if (selectedExecution.id !== lastExecutionId) {
+        loadFinalOutput(selectedExecution.id);
+        loadExecutionHistory(selectedExecution.id, true); // Force update when execution ID changes
+        setLastExecutionId(selectedExecution.id);
+      }
     }
-  }, [selectedExecution, loadFinalOutput, loadExecutionHistory]);
+  }, [selectedExecution?.id, lastExecutionId, loadFinalOutput, loadExecutionHistory]);
 
   const handleExecuteWorkflow = async () => {
     if (!workflowId) return;
@@ -92,6 +130,10 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
       const execution = await executionApi.executeWorkflow(workflowId);
       setExecutions([execution, ...executions]);
       setSelectedExecution(execution);
+      
+      // Clear previous execution history to show fresh start
+      setExecutionHistory([]);
+      setFinalOutput(null);
       
       // Poll execution status
       pollExecutionStatus(execution.id);
@@ -102,35 +144,85 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
   };
 
   const pollExecutionStatus = async (executionId: number) => {
+    // Prevent multiple polling instances for the same execution
+    if (currentPollingId === executionId) {
+      return;
+    }
+    
+    setCurrentPollingId(executionId);
+    
     const pollInterval = setInterval(async () => {
       try {
         const execution = await executionApi.getExecution(executionId);
         
-        // Update execution records
-        setExecutions(prev => 
-          prev.map(e => e.id === executionId ? execution : e)
-        );
+        // Update execution records only if there are changes
+        setExecutions(prev => {
+          const existingExecution = prev.find(e => e.id === executionId);
+          if (!existingExecution || 
+              existingExecution.status !== execution.status || 
+              existingExecution.current_node !== execution.current_node) {
+            return prev.map(e => e.id === executionId ? execution : e);
+          }
+          return prev;
+        });
         
+        // Update selected execution only if there are meaningful changes
         if (selectedExecution?.id === executionId) {
-          setSelectedExecution(execution);
+          if (selectedExecution.status !== execution.status || 
+              selectedExecution.current_node !== execution.current_node ||
+              selectedExecution.completed_at !== execution.completed_at) {
+            setSelectedExecution(execution);
+          }
         }
 
         // If execution completed, stop polling and reload final output
         if (execution.status === ExecutionStatus.COMPLETED || 
             execution.status === ExecutionStatus.FAILED) {
           clearInterval(pollInterval);
-          if (selectedExecution?.id === executionId) {
-            loadFinalOutput(executionId);
+          setCurrentPollingId(null);
+          
+          // Update the execution state first
+          setExecutions(prev => {
+            const existingExecution = prev.find(e => e.id === executionId);
+            if (!existingExecution || existingExecution.status !== execution.status) {
+              return prev.map(e => e.id === executionId ? execution : e);
+            }
+            return prev;
+          });
+          
+          // Update selectedExecution and then load final output
+          setSelectedExecution(prev => {
+            if (prev?.id === executionId) {
+              const updatedExecution = { ...prev, ...execution };
+              // Load final output after updating the state
+              setTimeout(() => {
+                console.log('Loading final output for completed execution:', executionId);
+                loadFinalOutput(executionId);
+                loadExecutionHistory(executionId, true);
+              }, 50);
+              return updatedExecution;
+            }
+            return prev;
+          });
+        } else if (execution.status === ExecutionStatus.PAUSED) {
+          // Only reload history when execution is paused (human control triggered)
+          // This prevents unnecessary updates during normal running state
+          if (selectedExecution?.id === executionId && selectedExecution?.status !== ExecutionStatus.PAUSED) {
+            loadExecutionHistory(executionId);
           }
         }
       } catch (err) {
         console.error('Failed to get execution status:', err);
         clearInterval(pollInterval);
+        setCurrentPollingId(null);
       }
     }, 1000);
 
     // Stop polling after 30 seconds
-    setTimeout(() => clearInterval(pollInterval), 30000);
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setCurrentPollingId(null);
+    }, 30000);
   };
 
   const handleDeleteExecution = async (executionId: number, e: React.MouseEvent) => {
@@ -173,7 +265,9 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
       
       console.log('Continue execution response:', result);
       
+      // Close human feedback modal immediately upon successful continue
       setShowHumanFeedback(false);
+      console.log('Human feedback modal closed');
       
       // Immediately update local state
       setSelectedExecution(result);
@@ -184,8 +278,9 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
       // Only show success message when truly successful
       console.log('Workflow continued execution successfully, status:', result.status);
       
-      // Restart polling
-      pollExecutionStatus(selectedExecution.id);
+      // Reload execution history to reflect the continuation
+      loadExecutionHistory(selectedExecution.id, true);
+      // Note: polling will continue from the existing interval
       
       // Restart workflow editor polling if available
       if ((window as any).restartWorkflowPolling) {
@@ -333,6 +428,17 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
           </div>
         )}
 
+        {/* Node Execution Status - Top Position */}
+        <div className="mb-8">
+          <NodeExecutionList
+            executionHistory={executionHistory}
+            currentNode={selectedExecution?.current_node}
+            executionStatus={selectedExecution?.status}
+            isLoading={loadingHistory}
+          />
+        </div>
+
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Execution List */}
           <div className="xl:col-span-1">
@@ -755,7 +861,37 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
           onContinue={handleContinueExecution}
           onClose={() => setShowHumanFeedback(false)}
           loading={continueLoading}
-          currentNodeName={selectedExecution.current_node || "Human Control"}
+          currentNodeName={(() => {
+            // Get the actual node name from execution history
+            const currentNodeData = executionHistory.find(
+              item => item.node_id === selectedExecution.current_node
+            );
+            return currentNodeData?.node_name || selectedExecution.current_node || "Human Control";
+          })()}
+          humanInterventionDescription={(() => {
+            // Get human intervention description from execution history
+            const currentNodeData = executionHistory.find(
+              item => item.node_id === selectedExecution.current_node && item.node_type === 'human_control'
+            );
+            // Try to get the message from node_config first, then from variables_snapshot
+            const nodeConfig = currentNodeData?.node_config;
+            let message = null;
+            
+            if (nodeConfig) {
+              if (typeof nodeConfig === 'string') {
+                try {
+                  const parsedConfig = JSON.parse(nodeConfig);
+                  message = parsedConfig.message;
+                } catch (e) {
+                  // If parsing fails, nodeConfig might already be an object
+                }
+              } else if (typeof nodeConfig === 'object') {
+                message = nodeConfig.message;
+              }
+            }
+            
+            return message || "Workflow paused, waiting for human intervention";
+          })()}
         />
       )}
     </div>
