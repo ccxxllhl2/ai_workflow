@@ -144,8 +144,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
         };
       case NodeType.AGENT:
         return { 
-          prompt: '', 
-          outputVariable: 'agent_output',
+          prompt: '',
           modelType: 'qwen',
           modelName: 'qwen-turbo'
         };
@@ -385,6 +384,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
         isOpen={isConfigPanelOpen}
         onClose={() => setIsConfigPanelOpen(false)}
         onSave={handleNodeConfigSave}
+        allNodes={nodes as WorkflowNode[]}
       />
     </div>
   );

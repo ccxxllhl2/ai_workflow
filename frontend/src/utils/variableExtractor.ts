@@ -39,16 +39,8 @@ export const extractVariablesFromNodes = (nodes: WorkflowNode[]): Variable[] => 
         break;
 
       case NodeType.AGENT:
-        // Extract from output variables
-        if (config.outputVariable) {
-          variables.push({
-            name: config.outputVariable,
-            nodeId: node.id,
-            nodeLabel: node.data.label || 'AI Agent',
-            nodeType: node.type,
-            source: 'output'
-          });
-        }
+        // Agent节点的输出直接传递给下一个节点，不作为变量引用
+        // 因此不提取outputVariable作为可用变量
         break;
 
       case NodeType.IF:
