@@ -10,7 +10,7 @@ from app.models.workflow import Workflow
 from app.models.execution import Execution
 from app.models.schemas import (
     WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowWithArgsResponse,
-    WorkflowWithDetailsResponse, WorkflowExportData, WorkflowImportRequest, 
+    WorkflowWithDetailsResponse, VariableInfo, WorkflowExportData, WorkflowImportRequest, 
     WorkflowImportResponse, WorkflowExecuteRequest, RunWorkflowRequest, RunWorkflowResponse
 )
 from app.core.workflow_engine import WorkflowEngine
@@ -44,7 +44,7 @@ def parse_workflow_details(config_json: str) -> Dict[str, Any]:
         
         # 找到start节点
         start_node = None
-        start_vars = {}
+        start_vars = []
         
         for node in nodes:
             if node.get('type') == 'start':
@@ -69,14 +69,17 @@ def parse_workflow_details(config_json: str) -> Dict[str, Any]:
                     except json.JSONDecodeError:
                         variable_descriptions = {}
                 
-                # 构建变量字典 {变量名: 描述}
+                # 构建变量数组 [{"name": "var1", "description": "desc1"}]
                 if isinstance(initial_variables, dict):
                     for var_name in initial_variables.keys():
                         if var_name.strip():  # 过滤掉空键值
                             description = ""
                             if isinstance(variable_descriptions, dict):
                                 description = variable_descriptions.get(var_name, "")
-                            start_vars[var_name] = description
+                            start_vars.append({
+                                "name": var_name,
+                                "description": description
+                            })
                 break
         
         # 从start节点开始遍历
@@ -127,7 +130,14 @@ async def get_workflows(
         # 解析工作流配置，提取节点顺序和变量
         details = parse_workflow_details(workflow.config)
         
-        # 创建响应对象
+        # 创建响应对象，转换vars为VariableInfo对象列表
+        variable_info_list = []
+        for var_info in details['vars']:
+            variable_info_list.append(VariableInfo(
+                name=var_info['name'],
+                description=var_info['description']
+            ))
+        
         workflow_response = WorkflowWithDetailsResponse(
             id=workflow.id,
             name=workflow.name,
@@ -137,7 +147,7 @@ async def get_workflows(
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
             nodes=details['nodes'],
-            vars=details['vars']
+            vars=variable_info_list
         )
         result.append(workflow_response)
     
