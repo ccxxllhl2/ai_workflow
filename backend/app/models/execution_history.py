@@ -27,21 +27,6 @@ class ExecutionHistory(Base):
     variables_snapshot = Column(Text, nullable=True)  # 当时的变量快照（JSON格式）
     agent_prompt = Column(Text, nullable=True)  # AI Agent的提示词
     agent_response = Column(Text, nullable=True)  # AI Agent的响应
-    chat_history = Column(Text, nullable=True)  # Human Control的聊天历史（JSON格式）
     
     # 关联关系
-    execution = relationship("Execution", back_populates="history_records")
-
-# 聊天消息模型（用于存储Human Control节点的聊天记录）
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    execution_id = Column(Integer, ForeignKey("executions.id"), nullable=False)
-    node_id = Column(String(255), nullable=True)  # 关联的节点ID（可选）
-    role = Column(String(20), nullable=False)  # 'user' 或 'assistant'
-    content = Column(Text, nullable=False)  # 消息内容
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    
-    # 关联关系
-    execution = relationship("Execution") 
+    execution = relationship("Execution", back_populates="history_records") 

@@ -27,108 +27,141 @@ class WorkflowEngine:
             NodeType.END: EndNodeProcessor()
         }
     
-    async def execute_workflow(self, execution_id: int, initial_variables: Dict[str, Any] = None):
+    async def execute_workflow(self, execution_id: int, initial_args: Dict[str, Any] = None):
         """执行工作流"""
         try:
             execution = self.db.query(Execution).filter(Execution.id == execution_id).first()
             if not execution:
-                raise Exception(f"Execution {execution_id} not found")
-            
-            # 更新执行状态
-            execution.status = ExecutionStatus.RUNNING
-            self.db.commit()
-            
-            # 获取工作流配置
-            workflow = execution.workflow
-            workflow_config = json.loads(workflow.config)
-            
-            # 初始化变量
-            if initial_variables:
-                await self.variable_manager.set_variables(execution_id, initial_variables, "start")
+                raise ValueError(f"Execution {execution_id} not found")
+
+            workflow = self.db.query(Workflow).filter(Workflow.id == execution.workflow_id).first()
+            if not workflow:
+                raise ValueError(f"Workflow {execution.workflow_id} not found")
+
+            # 设置初始变量（如果有的话）
+            variable_manager = VariableManager(self.db)
+            if initial_args:
+                for key, value in initial_args.items():
+                    from app.models.variable import VariableType
+                    var_type = variable_manager._infer_type(value)
+                    await variable_manager.set_variable(
+                        execution_id, 
+                        key, 
+                        value, 
+                        var_type,
+                        "start_node"
+                    )
+
+            # 解析工作流数据
+            workflow_data = json.loads(workflow.data) if isinstance(workflow.data, str) else workflow.data
+            nodes = workflow_data.get('nodes', [])
+            edges = workflow_data.get('edges', [])
+
+            # 构建节点图
+            node_dict = {node['id']: node for node in nodes}
             
             # 找到开始节点
-            start_node = self._find_start_node(workflow_config)
+            start_node = None
+            for node in nodes:
+                if node.get('type') == 'start':
+                    start_node = node
+                    break
+            
             if not start_node:
-                raise Exception("No start node found in workflow")
+                raise ValueError("No start node found in workflow")
+
+            # 设置初始输入（将开始节点的输出变量设置为current_input）
+            start_config = start_node.get('data', {}).get('config', {})
+            start_output = ""
+            if initial_args:
+                # 合并所有初始参数为一个字符串
+                start_output = "\n".join([f"{k}: {v}" for k, v in initial_args.items()])
             
-            # 从开始节点执行
-            await self._execute_from_node(execution_id, start_node, workflow_config)
-            
-        except Exception as e:
-            # 更新执行状态为失败
-            execution = self.db.query(Execution).filter(Execution.id == execution_id).first()
-            if execution:
-                execution.status = ExecutionStatus.FAILED
-                execution.error_message = str(e)
-                execution.completed_at = datetime.utcnow()
-                self.db.commit()
-            raise e
-    
-    async def continue_execution(self, execution_id: int, additional_variables: Dict[str, Any] = None):
-        """继续暂停的工作流执行"""
-        try:
-            print(f"DEBUG: continue_execution called for execution {execution_id}")
-            execution = self.db.query(Execution).filter(Execution.id == execution_id).first()
-            if not execution:
-                raise Exception(f"Execution {execution_id} not found")
-            
-            if execution.status != ExecutionStatus.PAUSED:
-                raise Exception("Execution is not paused")
-            
-            print(f"DEBUG: Current node before continue: {execution.current_node}")
-            
-            # 更新执行状态
+            await variable_manager.set_variable(
+                execution_id, 
+                'current_input', 
+                start_output, 
+                VariableType.STRING,
+                start_node['id']
+            )
+
+            # 执行开始节点
             execution.status = ExecutionStatus.RUNNING
             self.db.commit()
+
+            # 从开始节点开始执行
+            current_node = start_node
             
-            # 添加新变量
-            if additional_variables:
-                await self.variable_manager.set_variables(execution_id, additional_variables, execution.current_node)
-                print(f"DEBUG: Added variables: {additional_variables}")
-            
-            # 获取工作流配置
-            workflow = execution.workflow
-            workflow_config = json.loads(workflow.config)
-            
-            # 从暂停的节点找到下一个节点继续执行
-            current_node = self._find_node_by_id(workflow_config, execution.current_node)
-            print(f"DEBUG: Current node found: {current_node}")
-            
-            # 找到下一个节点
-            next_node_id = self._find_next_node_id(workflow_config, execution.current_node)
-            print(f"DEBUG: Next node ID: {next_node_id}")
-            
-            if next_node_id:
-                next_node = self._find_node_by_id(workflow_config, next_node_id)
-                print(f"DEBUG: Next node found: {next_node}")
+            while current_node:
+                node_type = current_node.get('type')
                 
-                if next_node:
-                    # 从下一个节点开始执行
-                    print("DEBUG: Starting execution from next node")
-                    await self._execute_from_node(execution_id, next_node, workflow_config)
+                # 记录节点开始执行
+                await variable_manager.set_variable(
+                    execution_id,
+                    f"node_{current_node['id']}_start",
+                    datetime.utcnow().isoformat(),
+                    VariableType.STRING,
+                    current_node['id']
+                )
+                
+                # 处理不同类型的节点
+                if node_type == 'start':
+                    # 开始节点已经处理过，直接继续
+                    result = {'status': 'success'}
+                elif node_type == 'ai_agent':
+                    result = await self.processors[NodeType.AI_AGENT].process(
+                        current_node, execution_id, variable_manager, self.db
+                    )
+                elif node_type == 'condition':
+                    result = await self.processors[NodeType.CONDITION].process(
+                        current_node, execution_id, variable_manager, self.db
+                    )
+                elif node_type == 'end':
+                    # 使用EndNodeProcessor处理结束节点
+                    result = await self.processors[NodeType.END].process(
+                        current_node, execution_id, variable_manager, self.db
+                    )
+                    if result.get('status') == 'completed':
+                        break  # 结束执行
                 else:
-                    # 没有下一个节点，工作流结束
-                    print("DEBUG: No next node found, completing workflow")
-                    execution.status = ExecutionStatus.COMPLETED
-                    execution.completed_at = datetime.utcnow()
+                    result = {'status': 'error', 'error': f'Unknown node type: {node_type}'}
+                
+                # 记录节点完成
+                await variable_manager.set_variable(
+                    execution_id,
+                    f"node_{current_node['id']}_result",
+                    json.dumps(result),
+                    VariableType.JSON,
+                    current_node['id']
+                )
+                
+                # 检查结果
+                if result.get('status') == 'error':
+                    execution.status = ExecutionStatus.FAILED
+                    execution.error_message = result.get('error', 'Unknown error')
                     self.db.commit()
-            else:
-                # 没有下一个节点，工作流结束
-                print("DEBUG: No next node ID found, completing workflow")
-                execution.status = ExecutionStatus.COMPLETED
-                execution.completed_at = datetime.utcnow()
-                self.db.commit()
-            
+                    return
+                
+                # 查找下一个节点
+                next_node = None
+                for edge in edges:
+                    if edge['source'] == current_node['id']:
+                        next_node_id = edge['target']
+                        next_node = node_dict.get(next_node_id)
+                        break
+                
+                current_node = next_node
+
+            # 执行完成
+            execution.status = ExecutionStatus.COMPLETED
+            execution.completed_at = datetime.utcnow()
+            self.db.commit()
+
         except Exception as e:
-            print(f"DEBUG: Exception in continue_execution: {str(e)}")
-            # 更新执行状态为失败
-            execution = self.db.query(Execution).filter(Execution.id == execution_id).first()
-            if execution:
-                execution.status = ExecutionStatus.FAILED
-                execution.error_message = str(e)
-                execution.completed_at = datetime.utcnow()
-                self.db.commit()
-            raise e
+            execution.status = ExecutionStatus.FAILED
+            execution.error_message = str(e)
+            self.db.commit()
+            raise
     
     async def _execute_from_node(self, execution_id: int, node: Dict[str, Any], workflow_config: Dict[str, Any]):
         """从指定节点开始执行"""

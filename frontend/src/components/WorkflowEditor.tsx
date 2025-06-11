@@ -214,6 +214,28 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
     }
   };
 
+  const testExecuteWorkflow = async () => {
+    if (!workflow) {
+      alert('Please select or create a workflow first');
+      return;
+    }
+
+    if (workflow.status !== WorkflowStatus.ACTIVE) {
+      alert('Please publish the workflow first');
+      return;
+    }
+
+    try {
+      const result = await workflowApi.executeWorkflow(workflow.id, {
+        variables: {}
+      });
+      alert(`${result.message}\n检查后端日志以查看执行详情`);
+    } catch (err) {
+      alert('Failed to execute workflow');
+      console.error('Failed to execute workflow:', err);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col">
       {/* Toolbar */}
@@ -249,9 +271,20 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
               className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l4-4m0 0l4-4m-4 4v12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
               {isSaving ? 'Publishing...' : 'Publish'}
+            </button>
+
+            <button
+              onClick={testExecuteWorkflow}
+              disabled={!workflow || workflow.status !== WorkflowStatus.ACTIVE}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Test Execute
             </button>
           </div>
         </div>

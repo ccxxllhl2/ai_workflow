@@ -14,35 +14,29 @@ class EndNodeProcessor(BaseNodeProcessor):
         variable_manager: VariableManager,
         db: Session
     ) -> Dict[str, Any]:
-        """处理结束节点"""
+        """处理结束节点 - 直接输出上一个节点的输入作为最终输出"""
         try:
-            # 获取节点配置 - 修复JSON解析问题
-            node_config = node.get('data', {}).get('config', {})
-            if isinstance(node_config, str):
-                node_config = json.loads(node_config)
+            # 获取当前输入（上一个节点的输出）
+            current_input = await variable_manager.get_variable(execution_id, 'current_input')
             
-            # 获取输出文本模板
-            output_template = node_config.get('output_text', '')
-            rendered_output = None
+            # 将当前输入作为字符串格式的最终输出
+            final_output = str(current_input) if current_input is not None else ""
             
-            # 如果有输出模板，使用Jinja2渲染
-            if output_template:
-                rendered_output = await variable_manager.render_template(execution_id, output_template)
-                
-                # 保存最终输出
-                await variable_manager.set_variable(
-                    execution_id,
-                    'final_output',
-                    rendered_output,
-                    variable_manager._infer_type(rendered_output),
-                    node['id']
-                )
+            # 保存最终输出
+            from app.models.variable import VariableType
+            await variable_manager.set_variable(
+                execution_id,
+                'final_output',
+                final_output,
+                VariableType.STRING,
+                node['id']
+            )
             
             # 结束节点标记工作流完成
             return {
                 'status': 'completed',
                 'message': 'Workflow completed successfully',
-                'final_output': rendered_output if output_template else None
+                'final_output': final_output
             }
             
         except Exception as e:

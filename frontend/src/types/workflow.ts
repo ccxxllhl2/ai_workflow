@@ -1,8 +1,8 @@
 // Workflow status enum
 export enum WorkflowStatus {
-  DRAFT = 'draft',
-  ACTIVE = 'active',
-  ARCHIVED = 'archived'
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED'
 }
 
 // Node type enum
@@ -11,16 +11,6 @@ export enum NodeType {
   AGENT = 'agent',
   IF = 'if',
   END = 'end'
-}
-
-// Execution status enum
-export enum ExecutionStatus {
-  PENDING = 'pending',
-  RUNNING = 'running',
-  PAUSED = 'paused',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled'
 }
 
 // Variable type enum
@@ -74,16 +64,20 @@ export interface Agent {
   updated_at: string;
 }
 
-// Execution record interface
-export interface Execution {
-  id: number;
-  workflow_id: number;
-  status: ExecutionStatus;
-  started_at: string;
-  completed_at?: string;
-  current_node?: string;
-  variables?: string; // JSON string
-  error_message?: string;
+// 外部Agent类型
+export interface ExternalAgent {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  icon: string;
+  modelName: string;
+  systemPrompt: string;
+  callCount: number;
+  temperature: number;
+  maxTokens: number;
+  createTime: string;
+  updateTime: string;
 }
 
 // Workflow config interface
@@ -122,9 +116,5 @@ export interface CreateAgentRequest {
 }
 
 export interface ExecuteWorkflowRequest {
-  variables?: Record<string, any>;
-}
-
-export interface ContinueExecutionRequest {
   variables?: Record<string, any>;
 } 

@@ -226,13 +226,6 @@ profile-*
 # vscode
 .vscode
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-app.db
-database.db
-
 # Project specific
 backend/app.db
 backend/database.db

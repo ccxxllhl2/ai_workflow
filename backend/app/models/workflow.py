@@ -5,9 +5,9 @@ import enum
 from app.database.database import Base
 
 class WorkflowStatus(enum.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
 
 class Workflow(Base):
     __tablename__ = "workflows"
@@ -22,4 +22,4 @@ class Workflow(Base):
     
     # 关联关系
     nodes = relationship("Node", back_populates="workflow", cascade="all, delete-orphan")
-    executions = relationship("Execution", back_populates="workflow", cascade="all, delete-orphan") 
+    executions = relationship("Execution", back_populates="workflow", cascade="all, delete-orphan")

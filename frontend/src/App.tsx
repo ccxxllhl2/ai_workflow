@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import WorkflowManager from './components/WorkflowManager/WorkflowManager';
 import WorkflowEditor from './components/WorkflowEditor';
-import { Workflow } from './types/workflow';
+import { Workflow, WorkflowStatus } from './types/workflow';
 
 enum AppView {
   MANAGER = 'manager',
@@ -100,9 +100,9 @@ function App() {
             <span className="font-medium text-gray-900">{selectedWorkflow.name}</span>
             <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
             <span className={`px-3 py-1 rounded-full text-xs font-medium shadow-sm ${
-              selectedWorkflow.status === 'active' 
+              selectedWorkflow.status === WorkflowStatus.ACTIVE 
                 ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200' 
-                : selectedWorkflow.status === 'draft'
+                : selectedWorkflow.status === WorkflowStatus.DRAFT
                 ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border border-yellow-200'
                 : 'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-800 border border-gray-200'
             }`}>

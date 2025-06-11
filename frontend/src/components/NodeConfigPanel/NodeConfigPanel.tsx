@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { WorkflowNode, NodeType, Agent } from '../../types/workflow';
-import { agentApi } from '../../services/api';
+import { WorkflowNode, NodeType, Agent, ExternalAgent } from '../../types/workflow';
+import { agentApi, externalAgentApi } from '../../services/api';
 
 interface NodeConfigPanelProps {
   node: WorkflowNode | null;
@@ -17,16 +17,39 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 }) => {
   const [config, setConfig] = useState<any>({});
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [externalAgents, setExternalAgents] = useState<ExternalAgent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<ExternalAgent | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (node) {
       setConfig(node.data.config || {});
       if (node.type === NodeType.AGENT) {
-        loadAgents();
+        loadExternalAgents();
       }
     }
   }, [node]);
+
+  // 获取外部Agent列表
+  const loadExternalAgents = async () => {
+    try {
+      setLoading(true);
+      const response = await externalAgentApi.getExternalAgents();
+      setExternalAgents(response.agents || []);
+    } catch (error) {
+      console.error('获取外部Agent失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 监听agentId变化，设置选中的Agent
+  useEffect(() => {
+    if (config.agentId && externalAgents.length > 0) {
+      const agent = externalAgents.find(a => a.id === config.agentId);
+      setSelectedAgent(agent || null);
+    }
+  }, [config.agentId, externalAgents]);
 
   const loadAgents = async () => {
     try {
@@ -67,114 +90,53 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const renderAgentNodeConfig = () => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Model Type
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          选择Agent
         </label>
-        <select
-          value={config.modelType || 'qwen'}
-          onChange={(e) => {
-            const newType = e.target.value;
-            const defaultModelName = newType === 'qwen' ? 'qwen-turbo' : 
-                                   newType === 'openai' ? 'gpt-3.5-turbo' : '';
-            setConfig({ ...config, modelType: newType, modelName: defaultModelName });
-          }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="qwen">Qwen Large Model</option>
-          <option value="openai">OpenAI ChatGPT</option>
-          <option value="agent">Use Configured Agent</option>
-        </select>
-      </div>
-
-      {config.modelType === 'agent' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Select Agent
-          </label>
-          {loading ? (
-            <div className="text-sm text-gray-500">Loading...</div>
-          ) : (
-            <select
-              value={config.agentId || ''}
-              onChange={(e) => setConfig({ ...config, agentId: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Please select Agent</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name} ({agent.model})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
-
-      {config.modelType === 'qwen' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Qwen Model
-          </label>
-          <input
-            type="text"
-            value={config.modelName || 'qwen-turbo'}
-            readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
-            placeholder="qwen-turbo"
-          />
-          <div className="text-xs text-gray-500 mt-1">
-            Using Qwen large model, requires QwenToken environment variable configuration
-          </div>
-        </div>
-      )}
-
-      {config.modelType === 'openai' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            OpenAI Model
-          </label>
+        {loading ? (
+          <div className="text-sm text-gray-500">正在加载Agent列表...</div>
+        ) : (
           <select
-            value={config.modelName || 'gpt-3.5-turbo'}
-            onChange={(e) => setConfig({ ...config, modelName: e.target.value })}
+            value={config.agentId || ''}
+            onChange={(e) => setConfig({ ...config, agentId: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-            <option value="gpt-3.5-turbo-16k">GPT-3.5 Turbo 16K</option>
-            <option value="gpt-4">GPT-4</option>
-            <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
+            <option value="">请选择Agent</option>
+            {externalAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
           </select>
-          <div className="text-xs text-gray-500 mt-1">
-            Using OpenAI ChatGPT models, requires OPENAI_API_KEY environment variable configuration
-          </div>
+        )}
+      </div>
+
+      {selectedAgent && (
+        <div className="bg-gray-50 p-3 rounded-md">
+          <h4 className="font-medium text-gray-800 mb-2">Agent信息</h4>
+          <p className="text-sm text-gray-600">
+            <strong>描述:</strong> {selectedAgent.description}
+          </p>
+          <p className="text-sm text-gray-600 mt-1">
+            <strong>模型:</strong> {selectedAgent.modelName}
+          </p>
         </div>
       )}
-      
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Prompt Template
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          输入提示词 (可选)
         </label>
         <textarea
           value={config.prompt || ''}
           onChange={(e) => setConfig({ ...config, prompt: e.target.value })}
+          placeholder="可以使用{{input}}引用前一个节点的输出，或者直接输入提示词..."
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={6}
-          placeholder="Enter prompt template, supports Jinja2 syntax, e.g: Hello {{name}}!"
+          rows={4}
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Output Variable Name
-        </label>
-        <input
-          type="text"
-          value={config.outputVariable || 'agent_output'}
-          onChange={(e) => setConfig({ ...config, outputVariable: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="agent_output"
-        />
+        <div className="text-xs text-gray-500 mt-1">
+          如果不填写，将直接使用前一个节点的输出作为Agent的输入
+        </div>
       </div>
     </div>
   );

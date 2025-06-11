@@ -15,14 +15,6 @@ class NodeTypeEnum(str, Enum):
     IF = "if"
     END = "end"
 
-class ExecutionStatusEnum(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
 class VariableTypeEnum(str, Enum):
     STRING = "string"
     NUMBER = "number"
@@ -52,6 +44,21 @@ class WorkflowResponse(WorkflowBase):
     
     class Config:
         from_attributes = True
+
+# 工作流执行请求
+class WorkflowExecuteRequest(BaseModel):
+    variables: Optional[Dict[str, Any]] = None
+
+# 运行工作流请求
+class RunWorkflowRequest(BaseModel):
+    id: str  # 工作流ID
+    args: Optional[Dict[str, Any]] = None  # 初始变量
+
+# 运行工作流响应
+class RunWorkflowResponse(BaseModel):
+    code: int  # 状态码，200表示成功
+    message: str  # 错误消息，成功时为空字符串
+    data: str  # 最终输出结果
 
 # 节点相关模式
 class NodeBase(BaseModel):
@@ -93,23 +100,6 @@ class AgentResponse(AgentBase):
     class Config:
         from_attributes = True
 
-# 执行相关模式
-class ExecutionCreate(BaseModel):
-    workflow_id: int
-
-class ExecutionResponse(BaseModel):
-    id: int
-    workflow_id: int
-    status: ExecutionStatusEnum
-    started_at: datetime
-    completed_at: Optional[datetime] = None
-    current_node: Optional[str] = None
-    variables: Optional[str] = None
-    error_message: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
 # 变量相关模式
 class VariableBase(BaseModel):
     name: str
@@ -126,14 +116,6 @@ class VariableResponse(VariableBase):
     
     class Config:
         from_attributes = True
-
-# 工作流执行请求
-class WorkflowExecuteRequest(BaseModel):
-    variables: Optional[Dict[str, Any]] = None
-
-# 继续执行请求
-class ContinueExecutionRequest(BaseModel):
-    variables: Optional[Dict[str, Any]] = None
 
 # 工作流导出和导入相关模式
 class WorkflowExportData(BaseModel):
