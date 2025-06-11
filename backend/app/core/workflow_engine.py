@@ -53,7 +53,7 @@ class WorkflowEngine:
                     )
 
             # 解析工作流数据
-            workflow_data = json.loads(workflow.data) if isinstance(workflow.data, str) else workflow.data
+            workflow_data = json.loads(workflow.config) if isinstance(workflow.config, str) else workflow.config
             nodes = workflow_data.get('nodes', [])
             edges = workflow_data.get('edges', [])
 
@@ -106,14 +106,16 @@ class WorkflowEngine:
                 
                 # 处理不同类型的节点
                 if node_type == 'start':
-                    # 开始节点已经处理过，直接继续
-                    result = {'status': 'success'}
-                elif node_type == 'ai_agent':
-                    result = await self.processors[NodeType.AI_AGENT].process(
+                    # 使用StartNodeProcessor处理开始节点
+                    result = await self.processors[NodeType.START].process(
                         current_node, execution_id, variable_manager, self.db
                     )
-                elif node_type == 'condition':
-                    result = await self.processors[NodeType.CONDITION].process(
+                elif node_type == 'agent':
+                    result = await self.processors[NodeType.AGENT].process(
+                        current_node, execution_id, variable_manager, self.db
+                    )
+                elif node_type == 'if':
+                    result = await self.processors[NodeType.IF].process(
                         current_node, execution_id, variable_manager, self.db
                     )
                 elif node_type == 'end':

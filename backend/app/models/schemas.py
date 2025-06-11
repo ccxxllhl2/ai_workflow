@@ -45,6 +45,15 @@ class WorkflowResponse(WorkflowBase):
     class Config:
         from_attributes = True
 
+class WorkflowWithArgsResponse(WorkflowResponse):
+    """工作流响应，包含参数信息"""
+    args: List[str] = []
+
+class WorkflowWithDetailsResponse(WorkflowResponse):
+    """工作流响应，包含节点和变量信息"""
+    nodes: List[str] = []  # 按执行顺序的节点名称列表
+    vars: Dict[str, str] = {}   # start节点的变量列表 {"var_name": "description"}
+
 # 工作流执行请求
 class WorkflowExecuteRequest(BaseModel):
     variables: Optional[Dict[str, Any]] = None

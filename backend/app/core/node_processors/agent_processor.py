@@ -13,7 +13,7 @@ class AgentNodeProcessor(BaseNodeProcessor):
         self, 
         node: Dict[str, Any], 
         execution_id: int, 
-        variable_manager: VariableManager, 
+        variable_manager: VariableManager,
         db: Session
     ) -> Dict[str, Any]:
         """处理Agent节点"""

@@ -9,9 +9,9 @@ from app.database.database import get_db
 from app.models.workflow import Workflow
 from app.models.execution import Execution
 from app.models.schemas import (
-    WorkflowCreate, WorkflowUpdate, WorkflowResponse,
-    WorkflowExportData, WorkflowImportRequest, WorkflowImportResponse,
-    WorkflowExecuteRequest, RunWorkflowRequest, RunWorkflowResponse
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowWithArgsResponse,
+    WorkflowWithDetailsResponse, WorkflowExportData, WorkflowImportRequest, 
+    WorkflowImportResponse, WorkflowExecuteRequest, RunWorkflowRequest, RunWorkflowResponse
 )
 from app.core.workflow_engine import WorkflowEngine
 
@@ -21,15 +21,127 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/", response_model=List[WorkflowResponse])
+def parse_workflow_details(config_json: str) -> Dict[str, Any]:
+    """解析工作流配置，提取节点执行顺序和start节点变量"""
+    try:
+        config = json.loads(config_json)
+        nodes = config.get('nodes', [])
+        edges = config.get('edges', [])
+        
+        # 构建节点字典和边映射
+        node_dict = {node['id']: node for node in nodes}
+        edge_map = {}
+        for edge in edges:
+            source = edge['source']
+            target = edge['target']
+            if source not in edge_map:
+                edge_map[source] = []
+            edge_map[source].append(target)
+        
+        # 按执行顺序排列节点
+        ordered_nodes = []
+        visited = set()
+        
+        # 找到start节点
+        start_node = None
+        start_vars = {}
+        
+        for node in nodes:
+            if node.get('type') == 'start':
+                start_node = node
+                # 提取start节点的变量
+                node_config = node.get('data', {}).get('config', {})
+                initial_variables = node_config.get('initialVariables', {})
+                variable_descriptions = node_config.get('variableDescriptions', {})
+                
+                # 如果initialVariables是字符串，尝试解析为JSON
+                if isinstance(initial_variables, str):
+                    try:
+                        initial_variables = json.loads(initial_variables)
+                    except json.JSONDecodeError:
+                        # 如果不是有效的JSON，设为空字典
+                        initial_variables = {}
+                
+                # 如果variableDescriptions是字符串，尝试解析为JSON
+                if isinstance(variable_descriptions, str):
+                    try:
+                        variable_descriptions = json.loads(variable_descriptions)
+                    except json.JSONDecodeError:
+                        variable_descriptions = {}
+                
+                # 构建变量字典 {变量名: 描述}
+                if isinstance(initial_variables, dict):
+                    for var_name in initial_variables.keys():
+                        if var_name.strip():  # 过滤掉空键值
+                            description = ""
+                            if isinstance(variable_descriptions, dict):
+                                description = variable_descriptions.get(var_name, "")
+                            start_vars[var_name] = description
+                break
+        
+        # 从start节点开始遍历
+        if start_node:
+            current_node_id = start_node['id']
+            
+            while current_node_id and current_node_id not in visited:
+                visited.add(current_node_id)
+                current_node = node_dict.get(current_node_id)
+                
+                if current_node:
+                    # 获取节点显示名称，优先使用label，否则使用id
+                    node_data = current_node.get('data', {})
+                    node_label = node_data.get('label', current_node_id)
+                    ordered_nodes.append(node_label)
+                
+                # 查找下一个节点
+                next_node_id = None
+                if current_node_id in edge_map and edge_map[current_node_id]:
+                    next_node_id = edge_map[current_node_id][0]  # 取第一个连接的节点
+                
+                current_node_id = next_node_id
+        
+        return {
+            'nodes': ordered_nodes,
+            'vars': start_vars
+        }
+        
+    except (json.JSONDecodeError, AttributeError, KeyError) as e:
+        # 记录错误但不影响API响应
+        logger.warning(f"解析工作流配置失败: {str(e)}")
+        return {
+            'nodes': [],
+            'vars': []
+        }
+
+@router.get("/", response_model=List[WorkflowWithDetailsResponse])
 async def get_workflows(
     skip: int = 0, 
     limit: int = 100, 
     db: Session = Depends(get_db)
 ):
-    """获取工作流列表"""
+    """获取工作流列表，包含节点和变量信息"""
     workflows = db.query(Workflow).offset(skip).limit(limit).all()
-    return workflows
+    
+    result = []
+    for workflow in workflows:
+        # 解析工作流配置，提取节点顺序和变量
+        details = parse_workflow_details(workflow.config)
+        
+        # 创建响应对象
+        workflow_response = WorkflowWithDetailsResponse(
+            id=workflow.id,
+            name=workflow.name,
+            description=workflow.description,
+            config=workflow.config,
+            status=workflow.status,
+            created_at=workflow.created_at,
+            updated_at=workflow.updated_at,
+            nodes=details['nodes'],
+            vars=details['vars']
+        )
+        result.append(workflow_response)
+    
+    return result
 
 @router.post("/", response_model=WorkflowResponse)
 async def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db)):

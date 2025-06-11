@@ -71,6 +71,23 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
     }
   }, [workflow, setNodes, setEdges]);
 
+  // 监听节点配置事件
+  useEffect(() => {
+    const handleNodeConfig = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        setSelectedNode(node as WorkflowNode);
+        setIsConfigPanelOpen(true);
+      }
+    };
+
+    window.addEventListener('nodeConfig', handleNodeConfig as EventListener);
+    return () => {
+      window.removeEventListener('nodeConfig', handleNodeConfig as EventListener);
+    };
+  }, [nodes]);
+
   const onConnect: OnConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
@@ -121,7 +138,10 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
   const getDefaultConfig = (type: NodeType): any => {
     switch (type) {
       case NodeType.START:
-        return { initialVariables: '{}' };
+        return { 
+          initialVariables: '{}',
+          variableDescriptions: '{}'
+        };
       case NodeType.AGENT:
         return { 
           prompt: '', 
@@ -275,7 +295,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
               </svg>
               {isSaving ? 'Publishing...' : 'Publish'}
             </button>
-
+            
             <button
               onClick={testExecuteWorkflow}
               disabled={!workflow || workflow.status !== WorkflowStatus.ACTIVE}

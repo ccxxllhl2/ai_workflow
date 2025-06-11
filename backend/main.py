@@ -66,7 +66,12 @@ app.add_middleware(
 # 启动时获取外部Agent信息
 @app.on_event("startup")
 async def startup_event():
-    await fetch_external_agents()
+    # 尝试获取外部Agent信息，但不阻止应用启动
+    success = await fetch_external_agents()
+    if success:
+        logger.info("外部Agent服务连接成功")
+    else:
+        logger.warning("外部Agent服务暂不可用，应用仍可正常运行")
 
 # 注册路由
 app.include_router(workflows.router, prefix="/api/workflows", tags=["workflows"])

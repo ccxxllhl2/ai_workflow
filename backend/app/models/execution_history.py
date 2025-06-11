@@ -29,4 +29,4 @@ class ExecutionHistory(Base):
     agent_response = Column(Text, nullable=True)  # AI Agent的响应
     
     # 关联关系
-    execution = relationship("Execution", back_populates="history_records") 
+    execution = relationship("Execution", back_populates="history_records")
