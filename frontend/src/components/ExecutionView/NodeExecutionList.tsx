@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { ExecutionStatus } from '../../types/workflow';
 
 interface NodeExecutionItem {
@@ -15,171 +15,217 @@ interface NodeExecutionItem {
 
 interface NodeExecutionListProps {
   executionHistory: NodeExecutionItem[];
+  workflowNodes?: any[];
   currentNode?: string | null;
   executionStatus?: ExecutionStatus | null;
   isLoading?: boolean;
   layout?: 'vertical' | 'horizontal';
+  onContinueExecution?: () => void;
 }
 
 const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
   executionHistory,
+  workflowNodes = [],
   currentNode,
   executionStatus,
   isLoading = false,
-  layout = 'horizontal'
+  layout = 'horizontal',
+  onContinueExecution
 }) => {
-  const [animatingNode, setAnimatingNode] = useState<string | null>(null);
-
-  // Memoize the node status map to prevent unnecessary re-renders
-  const nodeStatusMap = useMemo(() => {
-    const statusMap: Record<string, NodeExecutionItem> = {};
-    
-    // Add all nodes from history
-    executionHistory.forEach(item => {
-      statusMap[item.node_id] = item;
-    });
-
-    return statusMap;
-  }, [executionHistory]);
-
-  const nodeIds = useMemo(() => Object.keys(nodeStatusMap), [nodeStatusMap]);
-
-  // Trigger animation when current node changes
-  useEffect(() => {
-    if (currentNode && executionStatus === ExecutionStatus.RUNNING) {
-      setAnimatingNode(currentNode);
-      const timer = setTimeout(() => setAnimatingNode(null), 2000);
-      return () => clearTimeout(timer);
+  // 合并工作流节点和执行历史，创建完整的节点列表（保持执行顺序）
+  const allNodes = useMemo(() => {
+    if (workflowNodes.length > 0) {
+      // 如果有工作流节点信息，按照工作流节点的顺序进行处理
+      return workflowNodes.map(node => {
+        const nodeInfo = {
+          id: node.id,
+          name: node.data?.label || node.data?.config?.label || node.id, // 优先获取节点标签
+          type: node.type,
+          status: 'pending' as 'pending' | 'running' | 'completed' | 'failed' | 'paused' // 默认状态
+        };
+        
+        // 从执行历史中获取该节点的状态信息
+        const executionItem = executionHistory.find(item => item.node_id === node.id);
+        if (executionItem) {
+          nodeInfo.status = executionItem.status;
+          // 如果执行历史中有节点名称，也要更新（但保持优先级）
+          if (executionItem.node_name && !nodeInfo.name.includes('node_')) {
+            nodeInfo.name = executionItem.node_name;
+          }
+        } else {
+          // 如果没有执行历史记录，但该节点在当前节点之前，且执行状态不是PENDING，则认为已完成
+          const nodeIndex = workflowNodes.findIndex(n => n.id === node.id);
+          const currentNodeIndex = workflowNodes.findIndex(n => n.id === currentNode);
+          
+          if (currentNodeIndex >= 0 && nodeIndex >= 0 && nodeIndex < currentNodeIndex && 
+              executionStatus !== ExecutionStatus.PENDING) {
+            nodeInfo.status = 'completed';
+          }
+        }
+        
+        return nodeInfo;
+      });
+    } else {
+      // 如果没有工作流节点信息，从执行历史推断（回退机制）
+      const nodeMap: Record<string, any> = {};
+      executionHistory.forEach(item => {
+        nodeMap[item.node_id] = {
+          id: item.node_id,
+          name: item.node_name || item.node_id,
+          type: item.node_type,
+          status: item.status
+        };
+      });
+      return Object.values(nodeMap);
     }
-  }, [currentNode, executionStatus]);
+  }, [workflowNodes, executionHistory, currentNode, executionStatus]);
+
+  const nodeIds = useMemo(() => allNodes.map(node => node.id), [allNodes]);
+  
+  // 创建节点状态映射
+  const nodeStatusMap = useMemo(() => {
+    const statusMap: Record<string, any> = {};
+    allNodes.forEach(node => {
+      statusMap[node.id] = node;
+    });
+    return statusMap;
+  }, [allNodes]);
+
+  // 根据节点类型获取配色方案
+  const getNodeTypeColor = useCallback((nodeType: string) => {
+    switch (nodeType) {
+      case 'agent':
+        return {
+          bg: 'from-purple-50 to-purple-100',
+          border: 'border-purple-200',
+          activeBg: 'from-purple-100 to-purple-200',
+          activeBorder: 'border-purple-400',
+          text: 'text-purple-900'
+        };
+      case 'human_control':
+        return {
+          bg: 'from-amber-50 to-amber-100',
+          border: 'border-amber-200',
+          activeBg: 'from-amber-100 to-amber-200',
+          activeBorder: 'border-amber-400',
+          text: 'text-amber-900'
+        };
+      case 'start':
+        return {
+          bg: 'from-emerald-50 to-emerald-100',
+          border: 'border-emerald-200',
+          activeBg: 'from-emerald-100 to-emerald-200',
+          activeBorder: 'border-emerald-400',
+          text: 'text-emerald-900'
+        };
+      case 'code':
+        return {
+          bg: 'from-blue-50 to-blue-100',
+          border: 'border-blue-200',
+          activeBg: 'from-blue-100 to-blue-200',
+          activeBorder: 'border-blue-400',
+          text: 'text-blue-900'
+        };
+      case 'end':
+        return {
+          bg: 'from-red-50 to-red-100',
+          border: 'border-red-200',
+          activeBg: 'from-red-100 to-red-200',
+          activeBorder: 'border-red-400',
+          text: 'text-red-900'
+        };
+      default:
+        return {
+          bg: 'from-gray-50 to-gray-100',
+          border: 'border-gray-200',
+          activeBg: 'from-gray-100 to-gray-200',
+          activeBorder: 'border-gray-400',
+          text: 'text-gray-900'
+        };
+    }
+  }, []);
 
   const getNodeStatusIcon = (nodeId: string) => {
     const nodeData = nodeStatusMap[nodeId];
     
-    if (nodeId === currentNode) {
-      switch (executionStatus) {
-        case ExecutionStatus.RUNNING:
-          return (
-            <div className="relative">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-              </div>
-              <div className="absolute inset-0 w-6 h-6 bg-blue-400 rounded-full animate-ping opacity-75"></div>
-            </div>
-          );
-        case ExecutionStatus.PAUSED:
-          return (
-            <div className="relative">
-              <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
-                <div className="w-2 h-3 bg-white rounded-sm"></div>
-              </div>
-              <div className="absolute inset-0 w-6 h-6 bg-orange-400 rounded-full animate-pulse opacity-75"></div>
-            </div>
-          );
-        default:
-          return (
-            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-              <div className="w-3 h-3 bg-white rounded-full"></div>
-            </div>
-          );
-      }
-    }
-
-    if (!nodeData) {
+    // 优先检查节点是否已完成
+    if (nodeData && nodeData.status === 'completed') {
       return (
-        <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-          <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+          </svg>
         </div>
       );
     }
-
-    switch (nodeData.status) {
-      case 'completed':
+    
+    // 检查是否为当前节点
+    if (nodeId === currentNode) {
+      if (executionStatus === ExecutionStatus.PAUSED) {
         return (
-          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <div className="relative">
+            <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+              <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
+            </div>
+            <div className="absolute inset-0 w-5 h-5 bg-orange-400 rounded-full animate-pulse opacity-50"></div>
+          </div>
+        );
+      } else if (executionStatus === ExecutionStatus.RUNNING) {
+        return (
+          <div className="relative">
+            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+              <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse"></div>
+            </div>
+            <div className="absolute inset-0 w-5 h-5 bg-blue-400 rounded-full animate-ping opacity-75"></div>
+          </div>
+        );
+      }
+    }
+
+    // 检查是否在当前节点之前（基于工作流顺序）
+    if (workflowNodes.length > 0 && currentNode) {
+      const nodeIndex = workflowNodes.findIndex(node => node.id === nodeId);
+      const currentIndex = workflowNodes.findIndex(node => node.id === currentNode);
+      
+      if (nodeIndex >= 0 && currentIndex >= 0 && nodeIndex < currentIndex) {
+        return (
+          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
             </svg>
           </div>
         );
-      case 'failed':
-        return (
-          <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/>
-            </svg>
-          </div>
-        );
-      case 'paused':
-        return (
-          <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/>
-            </svg>
-          </div>
-        );
-      case 'running':
-        return (
-          <div className="relative">
-            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-              <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-            </div>
-            <div className="absolute inset-0 w-6 h-6 bg-blue-400 rounded-full animate-ping opacity-75"></div>
-          </div>
-        );
-      default:
-        return (
-          <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-          </div>
-        );
-    }
-  };
-
-  const getConnectionLine = (index: number, isLast: boolean) => {
-    if (isLast) return null;
-
-    const currentNodeData = nodeStatusMap[nodeIds[index]];
-    const nextNodeData = nodeStatusMap[nodeIds[index + 1]];
-    
-    let lineColor = 'bg-gray-300';
-    
-    if (currentNodeData?.status === 'completed' && nextNodeData) {
-      lineColor = 'bg-green-400';
-    } else if (currentNodeData?.status === 'failed') {
-      lineColor = 'bg-red-400';
-    } else if (nodeIds[index] === currentNode) {
-      lineColor = 'bg-blue-400';
+      }
     }
 
+    // 默认为未运行状态
     return (
-      <div className={`w-0.5 h-8 ${lineColor} mx-auto transition-colors duration-500`}></div>
+      <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center">
+        <div className="w-2.5 h-2.5 bg-gray-500 rounded-full"></div>
+      </div>
     );
   };
 
-  const formatDuration = useCallback((duration?: number) => {
-    if (!duration) return '';
-    if (duration < 60) return `${duration.toFixed(1)}s`;
-    const minutes = Math.floor(duration / 60);
-    const seconds = (duration % 60).toFixed(1);
-    return `${minutes}m ${seconds}s`;
-  }, []);
+  // 检查是否需要显示继续按钮
+  const shouldShowContinueButton = useCallback((nodeId: string) => {
+    const nodeData = nodeStatusMap[nodeId];
+    return nodeId === currentNode && 
+           executionStatus === ExecutionStatus.PAUSED && 
+           nodeData?.type === 'human_control' &&
+           onContinueExecution;
+  }, [currentNode, executionStatus, nodeStatusMap, onContinueExecution]);
 
   const getNodeDisplayName = useCallback((nodeId: string) => {
     const nodeData = nodeStatusMap[nodeId];
-    return nodeData?.node_name || nodeId;
-  }, [nodeStatusMap]);
-
-  const getNodeType = useCallback((nodeId: string) => {
-    const nodeData = nodeStatusMap[nodeId];
-    return nodeData?.node_type || 'Unknown';
+    // 优先返回节点的名称，如果没有则返回ID
+    return nodeData?.name || nodeData?.node_name || nodeId;
   }, [nodeStatusMap]);
 
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-          <h2 className="text-xl font-bold flex items-center space-x-2">
+          <h2 className="text-lg font-bold flex items-center space-x-2">
             <span>🔄</span>
             <span>Node Execution Status</span>
           </h2>
@@ -198,7 +244,7 @@ const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
     return (
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-          <h2 className="text-xl font-bold flex items-center space-x-2">
+          <h2 className="text-lg font-bold flex items-center space-x-2">
             <span>🔄</span>
             <span>Node Execution Status</span>
           </h2>
@@ -217,13 +263,13 @@ const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
       <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-        <h2 className="text-xl font-bold flex items-center space-x-2">
+        <h2 className="text-lg font-bold flex items-center space-x-2">
           <span>🔄</span>
           <span>Node Execution Status</span>
         </h2>
         <p className="text-indigo-100 mt-1 text-sm">
-          {executionStatus === ExecutionStatus.RUNNING ? 'Workflow is running...' : 
-           executionStatus === ExecutionStatus.PAUSED ? 'Workflow is paused' :
+          {executionStatus === ExecutionStatus.RUNNING ? `Workflow is running... (Current: ${currentNode ? getNodeDisplayName(currentNode) : 'Unknown'})` : 
+           executionStatus === ExecutionStatus.PAUSED ? `Workflow is paused at: ${currentNode ? getNodeDisplayName(currentNode) : 'Unknown'}` :
            executionStatus === ExecutionStatus.COMPLETED ? 'Workflow completed' :
            executionStatus === ExecutionStatus.FAILED ? 'Workflow failed' : 'Ready to execute'}
         </p>
@@ -232,105 +278,64 @@ const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
       <div className="p-6">
         {layout === 'horizontal' ? (
           // Horizontal Layout - Grid of cards
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {nodeIds.map((nodeId, index) => {
               const nodeData = nodeStatusMap[nodeId];
               const isCurrentNode = nodeId === currentNode;
-              const isAnimating = nodeId === animatingNode;
+              const typeColors = getNodeTypeColor(nodeData?.type || 'default');
               
               return (
                 <div
                   key={nodeId}
-                  className={`relative p-4 rounded-xl transition-all duration-300 ${
+                  className={`relative p-3 rounded-lg transition-all duration-300 ${
                     isCurrentNode 
-                      ? 'bg-gradient-to-br from-blue-50 to-indigo-100 border-2 border-blue-300 shadow-lg transform scale-105' 
+                      ? `bg-gradient-to-br ${typeColors.activeBg} border-2 ${typeColors.activeBorder} shadow-md` 
                       : nodeData?.status === 'completed'
-                      ? 'bg-gradient-to-br from-green-50 to-emerald-100 border border-green-300'
-                      : nodeData?.status === 'failed'
-                      ? 'bg-gradient-to-br from-red-50 to-red-100 border border-red-300'
-                      : nodeData?.status === 'paused'
-                      ? 'bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-300'
-                      : 'bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-300'
-                  } ${isAnimating ? 'animate-pulse' : ''}`}
+                      ? 'bg-gradient-to-br from-green-50 to-emerald-100 border border-green-200'
+                      : `bg-gradient-to-br ${typeColors.bg} border ${typeColors.border}`
+                  }`}
                 >
                   {/* Execution Order Badge */}
-                  <div className="absolute -top-2 -left-2 w-6 h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                  <div className="absolute -top-1 -left-1 w-5 h-5 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </div>
                   
                   {/* Status Icon */}
-                  <div className="flex justify-center mb-3">
+                  <div className="flex justify-center mb-2">
                     {getNodeStatusIcon(nodeId)}
                   </div>
 
-                  {/* Node Info */}
-                  <div className="text-center">
-                    <h3 className={`font-medium text-sm mb-1 truncate ${
-                      isCurrentNode ? 'text-blue-900' : 'text-gray-900'
+                  {/* Node Name */}
+                  <div className="text-center mb-2">
+                    <h3 className={`font-medium text-xs truncate ${
+                      isCurrentNode ? typeColors.text : 'text-gray-900'
                     }`}>
                       {getNodeDisplayName(nodeId)}
                     </h3>
-                    
-                    <p className="text-xs text-gray-600 mb-2 capitalize">
-                      {getNodeType(nodeId)}
-                    </p>
-                    
-                    {nodeData?.status && (
-                      <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${
-                        nodeData.status === 'completed' ? 'bg-green-200 text-green-800' :
-                        nodeData.status === 'failed' ? 'bg-red-200 text-red-800' :
-                        nodeData.status === 'paused' ? 'bg-orange-200 text-orange-800' :
-                        nodeData.status === 'running' ? 'bg-blue-200 text-blue-800' :
-                        'bg-gray-200 text-gray-800'
-                      }`}>
-                        {nodeData.status}
-                      </span>
-                    )}
-
-                    {nodeData?.duration && (
-                      <div className="mt-2">
-                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full">
-                          {formatDuration(nodeData.duration)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Current Node Indicator */}
-                    {isCurrentNode && executionStatus === ExecutionStatus.RUNNING && (
-                      <div className="mt-2 flex items-center justify-center space-x-1">
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-blue-600 font-medium">Running</span>
-                      </div>
-                    )}
-
-                    {isCurrentNode && executionStatus === ExecutionStatus.PAUSED && (
-                      <div className="mt-2 flex items-center justify-center space-x-1">
-                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                        <span className="text-xs text-orange-600 font-medium">Waiting</span>
-                      </div>
-                    )}
-
-                    {/* Error Message */}
-                    {nodeData?.error_message && (
-                      <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded text-xs text-red-700 text-left">
-                        {nodeData.error_message.length > 50 
-                          ? `${nodeData.error_message.substring(0, 50)}...` 
-                          : nodeData.error_message}
-                      </div>
-                    )}
                   </div>
+
+                  {/* Continue Button for Human Control Nodes */}
+                  {shouldShowContinueButton(nodeId) && (
+                    <div className="text-center">
+                      <button
+                        onClick={onContinueExecution}
+                        className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors duration-200 flex items-center space-x-1 mx-auto"
+                      >
+                        <span>▶️</span>
+                        <span>继续</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Connection Arrow to Next Node */}
                   {index < nodeIds.length - 1 && (
-                    <div className="absolute -right-2 top-1/2 transform -translate-y-1/2 z-10">
-                      <div className={`w-4 h-0.5 ${
+                    <div className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 z-10">
+                      <div className={`w-3 h-0.5 ${
                         nodeData?.status === 'completed' ? 'bg-green-400' :
-                        nodeData?.status === 'failed' ? 'bg-red-400' :
                         nodeId === currentNode ? 'bg-blue-400' : 'bg-gray-300'
                       } transition-colors duration-500`}></div>
                       <div className={`absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-0.5 w-0 h-0 border-l-2 border-t border-b ${
                         nodeData?.status === 'completed' ? 'border-l-green-400 border-t-transparent border-b-transparent' :
-                        nodeData?.status === 'failed' ? 'border-l-red-400 border-t-transparent border-b-transparent' :
                         nodeId === currentNode ? 'border-l-blue-400 border-t-transparent border-b-transparent' : 
                         'border-l-gray-300 border-t-transparent border-b-transparent'
                       } transition-colors duration-500`}></div>
@@ -346,86 +351,60 @@ const NodeExecutionList: React.FC<NodeExecutionListProps> = ({
             {nodeIds.map((nodeId, index) => {
               const nodeData = nodeStatusMap[nodeId];
               const isCurrentNode = nodeId === currentNode;
-              const isAnimating = nodeId === animatingNode;
+              const typeColors = getNodeTypeColor(nodeData?.type || 'default');
               
               return (
                 <div key={nodeId} className="flex flex-col">
-                  <div className={`flex items-center space-x-4 p-3 rounded-lg transition-all duration-300 ${
+                  <div className={`p-3 rounded-lg transition-all duration-300 ${
                     isCurrentNode 
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 shadow-md transform scale-105' 
+                      ? `bg-gradient-to-r ${typeColors.activeBg} border-2 ${typeColors.activeBorder} shadow-md` 
                       : nodeData?.status === 'completed'
                       ? 'bg-green-50 border border-green-200'
-                      : nodeData?.status === 'failed'
-                      ? 'bg-red-50 border border-red-200'
-                      : nodeData?.status === 'paused'
-                      ? 'bg-orange-50 border border-orange-200'
-                      : 'bg-gray-50 border border-gray-200'
-                  } ${isAnimating ? 'animate-pulse' : ''}`}>
+                      : `bg-gradient-to-r ${typeColors.bg} border ${typeColors.border}`
+                  }`}>
                     
-                    {/* Status Icon */}
-                    <div className="flex-shrink-0">
-                      {getNodeStatusIcon(nodeId)}
-                    </div>
+                    <div className="flex items-center space-x-3">
+                      {/* Execution Order */}
+                      <div className="flex-shrink-0 w-6 h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                        {index + 1}
+                      </div>
 
-                    {/* Node Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className={`font-medium truncate ${
-                          isCurrentNode ? 'text-blue-900' : 'text-gray-900'
+                      {/* Status Icon */}
+                      <div className="flex-shrink-0">
+                        {getNodeStatusIcon(nodeId)}
+                      </div>
+
+                      {/* Node Name */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-medium text-sm truncate ${
+                          isCurrentNode ? typeColors.text : 'text-gray-900'
                         }`}>
                           {getNodeDisplayName(nodeId)}
                         </h3>
-                        {nodeData?.duration && (
-                          <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full">
-                            {formatDuration(nodeData.duration)}
-                          </span>
-                        )}
                       </div>
-                      
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-sm text-gray-600 capitalize">
-                          {getNodeType(nodeId)}
-                        </span>
-                        
-                        {nodeData?.status && (
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                            nodeData.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            nodeData.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            nodeData.status === 'paused' ? 'bg-orange-100 text-orange-800' :
-                            nodeData.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {nodeData.status}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Error Message */}
-                      {nodeData?.error_message && (
-                        <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded text-xs text-red-700">
-                          {nodeData.error_message}
-                        </div>
-                      )}
-
-                      {/* Current Node Indicator */}
-                      {isCurrentNode && executionStatus === ExecutionStatus.RUNNING && (
-                        <div className="mt-2 flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs text-blue-600 font-medium">Currently executing...</span>
-                        </div>
-                      )}
-
-                      {isCurrentNode && executionStatus === ExecutionStatus.PAUSED && (
-                        <div className="mt-2 flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                          <span className="text-xs text-orange-600 font-medium">Waiting for input...</span>
-                        </div>
-                      )}
                     </div>
+
+                    {/* Continue Button for Human Control Nodes */}
+                    {shouldShowContinueButton(nodeId) && (
+                      <div className="mt-3 text-center">
+                        <button
+                          onClick={onContinueExecution}
+                          className="px-3 py-1 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 transition-colors duration-200 flex items-center space-x-1 mx-auto"
+                        >
+                          <span>▶️</span>
+                          <span>继续执行</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Connection Line */}
-                  {getConnectionLine(index, index === nodeIds.length - 1)}
+                  {index < nodeIds.length - 1 && (
+                    <div className={`w-0.5 h-4 ${
+                      nodeData?.status === 'completed' ? 'bg-green-400' :
+                      nodeId === currentNode ? 'bg-blue-400' : 'bg-gray-300'
+                    } mx-auto transition-colors duration-500`}></div>
+                  )}
                 </div>
               );
             })}

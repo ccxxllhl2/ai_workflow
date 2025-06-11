@@ -285,11 +285,6 @@ async def import_workflow(
             )
         )
         
-    except json.JSONEncodeError as e:
-        return WorkflowImportResponse(
-            success=False,
-            message=f"Failed to encode workflow configuration: {str(e)}"
-        )
     except Exception as e:
         db.rollback()
         return WorkflowImportResponse(

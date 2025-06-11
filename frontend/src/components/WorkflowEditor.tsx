@@ -49,7 +49,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
   const [isVariablePanelOpen, setIsVariablePanelOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus | null>(null);
-  const [currentExecutionId, setCurrentExecutionId] = useState<number | null>(null);
   const [executingNodeId, setExecutingNodeId] = useState<string | null>(null);
   
   // Use useRef to maintain node ID counter
@@ -246,7 +245,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
       
       // Execute workflow
       const execution = await executionApi.executeWorkflow(workflow.id);
-      setCurrentExecutionId(execution.id);
       setExecutionStatus(execution.status);
       
       // Start polling execution status
@@ -262,7 +260,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
     }
   };
 
-  const pollExecutionStatus = async (executionId: number) => {
+  const pollExecutionStatus = useCallback(async (executionId: number) => {
     // Clear existing polling if any
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -303,12 +301,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         pollingIntervalRef.current = null;
       }
     }, 300000);
-  };
+  }, []);
 
   // Method to restart polling (can be called when execution continues)
-  const restartPolling = (executionId: number) => {
+  const restartPolling = useCallback((executionId: number) => {
     pollExecutionStatus(executionId);
-  };
+  }, [pollExecutionStatus]);
 
   // Expose restart polling method globally for human feedback continue
   useEffect(() => {
@@ -316,7 +314,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
     return () => {
       delete (window as any).restartWorkflowPolling;
     };
-  }, []);
+  }, [restartPolling]);
 
   const getExecutionStatusColor = (status: ExecutionStatus | null) => {
     if (!status) return 'bg-gray-500';

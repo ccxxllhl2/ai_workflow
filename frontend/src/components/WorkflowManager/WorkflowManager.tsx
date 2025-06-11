@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Workflow, WorkflowStatus } from '../../types/workflow';
 import { workflowApi, ratingApi, WorkflowWithRating } from '../../services/api';
 
@@ -26,11 +26,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadWorkflows();
-  }, [currentUser]);
-
-  const loadWorkflows = async () => {
+  const loadWorkflows = useCallback(async () => {
     try {
       setLoading(true);
       const data = await workflowApi.getWorkflows(0, 100, currentUser?.id);
@@ -42,7 +38,11 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadWorkflows();
+  }, [loadWorkflows]);
 
   const handleCreateWorkflow = async () => {
     if (!newWorkflowName.trim()) {
