@@ -5,9 +5,9 @@ from enum import Enum
 
 # 枚举类型
 class WorkflowStatusEnum(str, Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
 
 class NodeTypeEnum(str, Enum):
     START = "start"

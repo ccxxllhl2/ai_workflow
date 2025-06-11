@@ -223,6 +223,9 @@ profile-*
 *.swp
 *.swo
 
+# cursor
+.cursor/
+
 # vscode
 .vscode
 
