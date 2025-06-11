@@ -225,71 +225,6 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     </div>
   );
 
-  const renderHumanControlNodeConfig = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Human Intervention Description
-        </label>
-        <textarea
-          value={config.message || ''}
-          onChange={(e) => setConfig({ ...config, message: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={3}
-          placeholder="Please describe the required human intervention..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Timeout (seconds)
-        </label>
-        <input
-          type="number"
-          value={config.timeout || 300}
-          onChange={(e) => setConfig({ ...config, timeout: parseInt(e.target.value) })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          min="1"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Allowed Actions
-        </label>
-        <div className="space-y-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.allowContinue !== false}
-              onChange={(e) => setConfig({ ...config, allowContinue: e.target.checked })}
-              className="mr-2"
-            />
-            Allow Continue
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.allowStop || false}
-              onChange={(e) => setConfig({ ...config, allowStop: e.target.checked })}
-              className="mr-2"
-            />
-            Allow Stop
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={config.allowModifyVariables || false}
-              onChange={(e) => setConfig({ ...config, allowModifyVariables: e.target.checked })}
-              className="mr-2"
-            />
-            Allow Modify Variables
-          </label>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderEndNodeConfig = () => (
     <div className="space-y-4">
       <div>
@@ -362,8 +297,6 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return renderAgentNodeConfig();
       case NodeType.IF:
         return renderIfNodeConfig();
-      case NodeType.HUMAN_CONTROL:
-        return renderHumanControlNodeConfig();
       case NodeType.END:
         return renderEndNodeConfig();
       default:
@@ -383,8 +316,6 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return 'Agent Node';
       case NodeType.IF:
         return 'Condition Node';
-      case NodeType.HUMAN_CONTROL:
-        return 'Human Control Node';
       case NodeType.END:
         return 'End Node';
       default:

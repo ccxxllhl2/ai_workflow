@@ -1,32 +1,16 @@
 import React, { useState } from 'react';
 import WorkflowManager from './components/WorkflowManager/WorkflowManager';
 import WorkflowEditor from './components/WorkflowEditor';
-import ExecutionView from './components/ExecutionView/ExecutionView';
-import Login from './components/Login/Login';
 import { Workflow } from './types/workflow';
-import { User } from './services/api';
-import './App.css';
 
 enum AppView {
   MANAGER = 'manager',
-  EDITOR = 'editor',
-  EXECUTION = 'execution'
+  EDITOR = 'editor'
 }
 
 function App() {
   const [currentView, setCurrentView] = useState<AppView>(AppView.MANAGER);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setSelectedWorkflow(null);
-    setCurrentView(AppView.MANAGER);
-  };
 
   const handleSelectWorkflow = (workflow: Workflow) => {
     setSelectedWorkflow(workflow);
@@ -42,23 +26,6 @@ function App() {
     setSelectedWorkflow(workflow);
   };
 
-  const handleViewExecution = () => {
-    if (selectedWorkflow) {
-      setCurrentView(AppView.EXECUTION);
-    }
-  };
-
-  const handleReturnToEditor = () => {
-    if (selectedWorkflow) {
-      setCurrentView(AppView.EDITOR);
-    }
-  };
-
-  // If not logged in, show login page
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
-
   const getViewIcon = (view: AppView) => {
     switch (view) {
       case AppView.MANAGER:
@@ -71,12 +38,6 @@ function App() {
         return (
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/>
-          </svg>
-        );
-      case AppView.EXECUTION:
-        return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"/>
           </svg>
         );
       default:
@@ -102,72 +63,34 @@ function App() {
             </div>
           </div>
 
-          {/* Navigation Buttons and User Info */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => setCurrentView(AppView.MANAGER)}
-                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
-                  currentView === AppView.MANAGER
-                    ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
-                    : 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
-                }`}
-              >
-                {getViewIcon(AppView.MANAGER)}
-                <span>Workflows</span>
-              </button>
-              
-              <button
-                onClick={() => setCurrentView(AppView.EDITOR)}
-                disabled={!selectedWorkflow && currentView !== AppView.EDITOR}
-                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
-                  currentView === AppView.EDITOR
-                    ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
-                    : selectedWorkflow
-                    ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
-                    : 'text-gray-400 cursor-not-allowed opacity-50'
-                }`}
-              >
-                {getViewIcon(AppView.EDITOR)}
-                <span>Editor</span>
-              </button>
-
-              <button
-                onClick={() => setCurrentView(AppView.EXECUTION)}
-                disabled={!selectedWorkflow}
-                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
-                  currentView === AppView.EXECUTION
-                    ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
-                    : selectedWorkflow
-                    ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
-                    : 'text-gray-400 cursor-not-allowed opacity-50'
-                }`}
-              >
-                {getViewIcon(AppView.EXECUTION)}
-                <span>Execution</span>
-              </button>
-            </div>
-
-            {/* User Info and Logout */}
-            <div className="flex items-center space-x-3 pl-4 border-l border-gray-200">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {currentUser.username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <span className="text-sm font-medium text-gray-700">{currentUser.username}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white/70 rounded-lg transition-colors"
-                title="Logout"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
+          {/* Navigation Buttons */}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => setCurrentView(AppView.MANAGER)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
+                currentView === AppView.MANAGER
+                  ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
+                  : 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
+              }`}
+            >
+              {getViewIcon(AppView.MANAGER)}
+              <span>Workflows</span>
+            </button>
+            
+            <button
+              onClick={() => setCurrentView(AppView.EDITOR)}
+              disabled={!selectedWorkflow && currentView !== AppView.EDITOR}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
+                currentView === AppView.EDITOR
+                  ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
+                  : selectedWorkflow
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
+                  : 'text-gray-400 cursor-not-allowed opacity-50'
+              }`}
+            >
+              {getViewIcon(AppView.EDITOR)}
+              <span>Editor</span>
+            </button>
           </div>
         </div>
 
@@ -198,7 +121,6 @@ function App() {
           <WorkflowManager
             onSelectWorkflow={handleSelectWorkflow}
             onCreateNewWorkflow={handleCreateNewWorkflow}
-            currentUser={currentUser}
           />
         );
       case AppView.EDITOR:
@@ -206,14 +128,6 @@ function App() {
           <WorkflowEditor
             workflow={selectedWorkflow}
             onSave={handleWorkflowSave}
-            onViewExecution={handleViewExecution}
-          />
-        );
-      case AppView.EXECUTION:
-        return (
-          <ExecutionView
-            workflowId={selectedWorkflow?.id}
-            onReturnToEditor={handleReturnToEditor}
           />
         );
       default:
@@ -249,10 +163,10 @@ function App() {
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='1.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
         }}
       ></div>
-      
+
       <div className="relative z-10">
         {renderNavigation()}
-        <main className="flex-1">
+        <main>
           {renderCurrentView()}
         </main>
       </div>

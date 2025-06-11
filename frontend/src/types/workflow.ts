@@ -10,7 +10,6 @@ export enum NodeType {
   START = 'start',
   AGENT = 'agent',
   IF = 'if',
-  HUMAN_CONTROL = 'human_control',
   END = 'end'
 }
 

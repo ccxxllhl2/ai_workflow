@@ -51,11 +51,6 @@ export const extractVariablesFromNodes = (nodes: WorkflowNode[]): Variable[] => 
         }
         break;
 
-      case NodeType.HUMAN_CONTROL:
-        // Human control nodes may modify variables, but usually don't define new ones
-        // This can be extended as needed
-        break;
-
       case NodeType.IF:
         // Condition nodes usually don't define new variables, only use existing ones
         break;

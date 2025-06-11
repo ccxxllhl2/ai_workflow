@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Workflow, WorkflowStatus } from '../../types/workflow';
-import { workflowApi, ratingApi, WorkflowWithRating } from '../../services/api';
+import { workflowApi } from '../../services/api';
 
 interface WorkflowManagerProps {
   onSelectWorkflow: (workflow: Workflow) => void;
   onCreateNewWorkflow: () => void;
-  currentUser?: { id: number; username: string } | null;
 }
 
 const WorkflowManager: React.FC<WorkflowManagerProps> = ({ 
   onSelectWorkflow, 
-  onCreateNewWorkflow,
-  currentUser
+  onCreateNewWorkflow
 }) => {
-  const [workflows, setWorkflows] = useState<WorkflowWithRating[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -29,7 +27,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
   const loadWorkflows = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await workflowApi.getWorkflows(0, 100, currentUser?.id);
+      const data = await workflowApi.getWorkflows(0, 100);
       setWorkflows(data);
       setError(null);
     } catch (err) {
@@ -38,7 +36,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     loadWorkflows();
@@ -165,108 +163,6 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
     }
   };
 
-  const handleLikeWorkflow = async (workflowId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!currentUser) {
-      alert('Please login to rate workflows');
-      return;
-    }
-
-    try {
-      const workflow = workflows.find(w => w.id === workflowId);
-      if (!workflow) return;
-
-      // Toggle like: if already liked, remove rating; otherwise set to liked
-      const newRating = workflow.user_rating === true ? null : true;
-      
-      await ratingApi.createOrUpdateRating(currentUser.id, workflowId, newRating);
-      
-      // Update local state
-      setWorkflows(prevWorkflows => 
-        prevWorkflows.map(w => {
-          if (w.id === workflowId) {
-            const updatedWorkflow = { ...w };
-            
-            // Update user rating
-            const oldRating = w.user_rating;
-            updatedWorkflow.user_rating = newRating;
-            
-            // Update counts
-            if (oldRating === true && newRating === null) {
-              // Remove like
-              updatedWorkflow.like_count = Math.max(0, w.like_count - 1);
-            } else if (oldRating === false && newRating === true) {
-              // Change from dislike to like
-              updatedWorkflow.like_count = w.like_count + 1;
-              updatedWorkflow.dislike_count = Math.max(0, w.dislike_count - 1);
-            } else if (oldRating === null && newRating === true) {
-              // Add like
-              updatedWorkflow.like_count = w.like_count + 1;
-            }
-            
-            return updatedWorkflow;
-          }
-          return w;
-        })
-      );
-    } catch (err) {
-      console.error('Failed to update rating:', err);
-      alert('Failed to update rating');
-    }
-  };
-
-  const handleDislikeWorkflow = async (workflowId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!currentUser) {
-      alert('Please login to rate workflows');
-      return;
-    }
-
-    try {
-      const workflow = workflows.find(w => w.id === workflowId);
-      if (!workflow) return;
-
-      // Toggle dislike: if already disliked, remove rating; otherwise set to disliked
-      const newRating = workflow.user_rating === false ? null : false;
-      
-      await ratingApi.createOrUpdateRating(currentUser.id, workflowId, newRating);
-      
-      // Update local state
-      setWorkflows(prevWorkflows => 
-        prevWorkflows.map(w => {
-          if (w.id === workflowId) {
-            const updatedWorkflow = { ...w };
-            
-            // Update user rating
-            const oldRating = w.user_rating;
-            updatedWorkflow.user_rating = newRating;
-            
-            // Update counts
-            if (oldRating === false && newRating === null) {
-              // Remove dislike
-              updatedWorkflow.dislike_count = Math.max(0, w.dislike_count - 1);
-            } else if (oldRating === true && newRating === false) {
-              // Change from like to dislike
-              updatedWorkflow.dislike_count = w.dislike_count + 1;
-              updatedWorkflow.like_count = Math.max(0, w.like_count - 1);
-            } else if (oldRating === null && newRating === false) {
-              // Add dislike
-              updatedWorkflow.dislike_count = w.dislike_count + 1;
-            }
-            
-            return updatedWorkflow;
-          }
-          return w;
-        })
-      );
-    } catch (err) {
-      console.error('Failed to update rating:', err);
-      alert('Failed to update rating');
-    }
-  };
-
   const getStatusColor = (status: WorkflowStatus) => {
     switch (status) {
       case WorkflowStatus.ACTIVE:
@@ -322,9 +218,6 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Workflow Management</h1>
             <p className="text-gray-600">Create and manage your AI workflows</p>
-            {currentUser && (
-              <p className="text-sm text-gray-500 mt-1">Logged in as: {currentUser.username}</p>
-            )}
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -456,55 +349,6 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
                 <div className="flex items-center justify-between">
                   <span>Updated</span>
                   <span>{formatDate(workflow.updated_at)}</span>
-                </div>
-              </div>
-              
-              {/* Like and dislike buttons with counts */}
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
-                <div className="flex items-center space-x-4 text-xs text-gray-500">
-                  <span className="flex items-center">
-                    <svg className="w-3 h-3 mr-1 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                    </svg>
-                    {workflow.like_count}
-                  </span>
-                  <span className="flex items-center">
-                    <svg className="w-3 h-3 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(180deg)' }}>
-                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                    </svg>
-                    {workflow.dislike_count}
-                  </span>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={(e) => handleLikeWorkflow(workflow.id, e)}
-                    disabled={!currentUser}
-                    className={`p-2 rounded-lg transition-all duration-200 ${
-                      workflow.user_rating === true
-                        ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                        : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                    } ${!currentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={currentUser ? "Like this workflow" : "Login to rate workflows"}
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => handleDislikeWorkflow(workflow.id, e)}
-                    disabled={!currentUser}
-                    className={`p-2 rounded-lg transition-all duration-200 ${
-                      workflow.user_rating === false
-                        ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                    } ${!currentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={currentUser ? "Dislike this workflow" : "Login to rate workflows"}
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" style={{ transform: 'rotate(180deg)' }}>
-                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
             </div>

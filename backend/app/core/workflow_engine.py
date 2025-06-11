@@ -11,7 +11,6 @@ from app.core.variable_manager import VariableManager
 from app.core.node_processors.start_processor import StartNodeProcessor
 from app.core.node_processors.agent_processor import AgentNodeProcessor
 from app.core.node_processors.if_processor import IfNodeProcessor
-from app.core.node_processors.human_control_processor import HumanControlNodeProcessor
 from app.core.node_processors.end_processor import EndNodeProcessor
 from datetime import datetime
 
@@ -25,7 +24,6 @@ class WorkflowEngine:
             NodeType.START: StartNodeProcessor(),
             NodeType.AGENT: AgentNodeProcessor(),
             NodeType.IF: IfNodeProcessor(),
-            NodeType.HUMAN_CONTROL: HumanControlNodeProcessor(),
             NodeType.END: EndNodeProcessor()
         }
     
@@ -92,40 +90,34 @@ class WorkflowEngine:
             workflow = execution.workflow
             workflow_config = json.loads(workflow.config)
             
-            # 对于人工干预节点，直接找到下一个节点继续执行
+            # 从暂停的节点找到下一个节点继续执行
             current_node = self._find_node_by_id(workflow_config, execution.current_node)
             print(f"DEBUG: Current node found: {current_node}")
             
-            if current_node and current_node.get('type') == 'human_control':
-                print("DEBUG: Processing human_control node")
-                # 找到下一个节点
-                next_node_id = self._find_next_node_id(workflow_config, execution.current_node)
-                print(f"DEBUG: Next node ID: {next_node_id}")
+            # 找到下一个节点
+            next_node_id = self._find_next_node_id(workflow_config, execution.current_node)
+            print(f"DEBUG: Next node ID: {next_node_id}")
+            
+            if next_node_id:
+                next_node = self._find_node_by_id(workflow_config, next_node_id)
+                print(f"DEBUG: Next node found: {next_node}")
                 
-                if next_node_id:
-                    next_node = self._find_node_by_id(workflow_config, next_node_id)
-                    print(f"DEBUG: Next node found: {next_node}")
-                    
-                    if next_node:
-                        # 直接从下一个节点开始执行，不更新当前节点ID（因为_execute_from_node会处理）
-                        print("DEBUG: Starting execution from next node")
-                        await self._execute_from_node(execution_id, next_node, workflow_config)
-                    else:
-                        # 没有下一个节点，工作流结束
-                        print("DEBUG: No next node found, completing workflow")
-                        execution.status = ExecutionStatus.COMPLETED
-                        execution.completed_at = datetime.utcnow()
-                        self.db.commit()
+                if next_node:
+                    # 从下一个节点开始执行
+                    print("DEBUG: Starting execution from next node")
+                    await self._execute_from_node(execution_id, next_node, workflow_config)
                 else:
                     # 没有下一个节点，工作流结束
-                    print("DEBUG: No next node ID found, completing workflow")
+                    print("DEBUG: No next node found, completing workflow")
                     execution.status = ExecutionStatus.COMPLETED
                     execution.completed_at = datetime.utcnow()
                     self.db.commit()
             else:
-                # 其他类型的节点从当前节点继续执行
-                print("DEBUG: Processing non-human_control node")
-                await self._execute_from_node(execution_id, current_node, workflow_config)
+                # 没有下一个节点，工作流结束
+                print("DEBUG: No next node ID found, completing workflow")
+                execution.status = ExecutionStatus.COMPLETED
+                execution.completed_at = datetime.utcnow()
+                self.db.commit()
             
         except Exception as e:
             print(f"DEBUG: Exception in continue_execution: {str(e)}")

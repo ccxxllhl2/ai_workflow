@@ -22,5 +22,4 @@ class Workflow(Base):
     
     # 关联关系
     nodes = relationship("Node", back_populates="workflow", cascade="all, delete-orphan")
-    executions = relationship("Execution", back_populates="workflow", cascade="all, delete-orphan")
-    ratings = relationship("WorkflowRating", back_populates="workflow", cascade="all, delete-orphan") 
+    executions = relationship("Execution", back_populates="workflow", cascade="all, delete-orphan") 

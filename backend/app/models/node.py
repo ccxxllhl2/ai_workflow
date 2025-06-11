@@ -7,7 +7,6 @@ class NodeType(enum.Enum):
     START = "start"
     AGENT = "agent"
     IF = "if"
-    HUMAN_CONTROL = "human_control"
     END = "end"
 
 class Node(Base):

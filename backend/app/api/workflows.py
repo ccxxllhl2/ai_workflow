@@ -1,74 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
 from typing import List, Optional
 import json
 from datetime import datetime
 from app.database.database import get_db
 from app.models.workflow import Workflow
-from app.models.workflow_rating import WorkflowRating
 from app.models.schemas import (
-    WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowWithRatingResponse,
+    WorkflowCreate, WorkflowUpdate, WorkflowResponse,
     WorkflowExportData, WorkflowImportRequest, WorkflowImportResponse
 )
 
 router = APIRouter()
 
-@router.get("/", response_model=List[WorkflowWithRatingResponse])
+@router.get("/", response_model=List[WorkflowResponse])
 async def get_workflows(
     skip: int = 0, 
     limit: int = 100, 
-    user_id: Optional[int] = Query(None, description="Current user ID to get rating info"),
     db: Session = Depends(get_db)
 ):
-    """获取工作流列表，包含评价信息"""
+    """获取工作流列表"""
     workflows = db.query(Workflow).offset(skip).limit(limit).all()
-    
-    result = []
-    for workflow in workflows:
-        # 获取评价统计
-        like_count = db.query(WorkflowRating).filter(
-            and_(
-                WorkflowRating.workflow_id == workflow.id,
-                WorkflowRating.is_liked == True
-            )
-        ).count()
-        
-        dislike_count = db.query(WorkflowRating).filter(
-            and_(
-                WorkflowRating.workflow_id == workflow.id,
-                WorkflowRating.is_liked == False
-            )
-        ).count()
-        
-        # 获取当前用户的评价
-        user_rating = None
-        if user_id:
-            rating = db.query(WorkflowRating).filter(
-                and_(
-                    WorkflowRating.user_id == user_id,
-                    WorkflowRating.workflow_id == workflow.id
-                )
-            ).first()
-            if rating:
-                user_rating = rating.is_liked
-        
-        workflow_data = WorkflowWithRatingResponse(
-            id=workflow.id,
-            name=workflow.name,
-            description=workflow.description,
-            config=workflow.config,
-            status=workflow.status,
-            created_at=workflow.created_at,
-            updated_at=workflow.updated_at,
-            user_rating=user_rating,
-            like_count=like_count,
-            dislike_count=dislike_count
-        )
-        result.append(workflow_data)
-    
-    return result
+    return workflows
 
 @router.post("/", response_model=WorkflowResponse)
 async def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db)):
@@ -79,56 +32,13 @@ async def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db
     db.refresh(db_workflow)
     return db_workflow
 
-@router.get("/{workflow_id}", response_model=WorkflowWithRatingResponse)
-async def get_workflow(
-    workflow_id: int, 
-    user_id: Optional[int] = Query(None, description="Current user ID to get rating info"),
-    db: Session = Depends(get_db)
-):
-    """获取工作流详情，包含评价信息"""
+@router.get("/{workflow_id}", response_model=WorkflowResponse)
+async def get_workflow(workflow_id: int, db: Session = Depends(get_db)):
+    """获取工作流详情"""
     workflow = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if workflow is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    # 获取评价统计
-    like_count = db.query(WorkflowRating).filter(
-        and_(
-            WorkflowRating.workflow_id == workflow.id,
-            WorkflowRating.is_liked == True
-        )
-    ).count()
-    
-    dislike_count = db.query(WorkflowRating).filter(
-        and_(
-            WorkflowRating.workflow_id == workflow.id,
-            WorkflowRating.is_liked == False
-        )
-    ).count()
-    
-    # 获取当前用户的评价
-    user_rating = None
-    if user_id:
-        rating = db.query(WorkflowRating).filter(
-            and_(
-                WorkflowRating.user_id == user_id,
-                WorkflowRating.workflow_id == workflow.id
-            )
-        ).first()
-        if rating:
-            user_rating = rating.is_liked
-    
-    return WorkflowWithRatingResponse(
-        id=workflow.id,
-        name=workflow.name,
-        description=workflow.description,
-        config=workflow.config,
-        status=workflow.status,
-        created_at=workflow.created_at,
-        updated_at=workflow.updated_at,
-        user_rating=user_rating,
-        like_count=like_count,
-        dislike_count=dislike_count
-    )
+    return workflow
 
 @router.put("/{workflow_id}", response_model=WorkflowResponse)
 async def update_workflow(
@@ -203,15 +113,14 @@ async def download_workflow(workflow_id: int, db: Session = Depends(get_db)):
         export_data = {
             "name": workflow.name,
             "description": workflow.description,
-            "status": workflow.status.value,
+            "status": workflow.status,
             "config": config_data,
-            "version": "1.0",
             "exported_at": datetime.utcnow().isoformat()
         }
         
         # 生成文件名
         safe_name = "".join(c for c in workflow.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{safe_name}_workflow.json"
+        filename = f"workflow_{safe_name}_{workflow.id}.json"
         
         return JSONResponse(
             content=export_data,

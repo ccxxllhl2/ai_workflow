@@ -19,42 +19,35 @@ import 'reactflow/dist/style.css';
 import StartNode from './NodeTypes/StartNode';
 import AgentNode from './NodeTypes/AgentNode';
 import IfNode from './NodeTypes/IfNode';
-import HumanControlNode from './NodeTypes/HumanControlNode';
 import EndNode from './NodeTypes/EndNode';
 import NodeConfigPanel from './NodeConfigPanel/NodeConfigPanel';
 import VariablePanel from './VariablePanel/VariablePanel';
-import { NodeType, WorkflowNode, Workflow, ExecutionStatus } from '../types/workflow';
-import { workflowApi, executionApi } from '../services/api';
+import { NodeType, WorkflowNode, Workflow, WorkflowStatus } from '../types/workflow';
+import { workflowApi } from '../services/api';
 import { extractVariablesFromNodes } from '../utils/variableExtractor';
 
 const nodeTypes: NodeTypes = {
   start: StartNode,
   agent: AgentNode,
   if: IfNode,
-  human_control: HumanControlNode,
   end: EndNode,
 };
 
 interface WorkflowEditorProps {
   workflow?: Workflow | null;
   onSave?: (workflow: Workflow) => void;
-  onViewExecution?: () => void;
 }
 
-const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onViewExecution }) => {
+const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
   const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
   const [isVariablePanelOpen, setIsVariablePanelOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus | null>(null);
-  const [executingNodeId, setExecutingNodeId] = useState<string | null>(null);
   
   // Use useRef to maintain node ID counter
   const nodeIdCounter = useRef(0);
-  // Store polling interval ref to control polling
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use useMemo to calculate variable list and avoid unnecessary recalculation
   const variables = useMemo(() => {
@@ -77,15 +70,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
       }
     }
   }, [workflow, setNodes, setEdges]);
-
-  // Clean up polling on component unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
 
   const onConnect: OnConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -127,8 +111,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         return 'AI Agent';
       case NodeType.IF:
         return 'Condition';
-      case NodeType.HUMAN_CONTROL:
-        return 'Human Control';
       case NodeType.END:
         return 'End';
       default:
@@ -149,8 +131,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         };
       case NodeType.IF:
         return { condition: '', trueLabel: 'Yes', falseLabel: 'No' };
-      case NodeType.HUMAN_CONTROL:
-        return { message: '', timeout: 300, allowContinue: true };
       case NodeType.END:
         return { outputFormat: 'json', successCode: 200 };
       default:
@@ -202,7 +182,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
     // Variable list will be automatically updated after node configuration is saved (via useMemo)
   };
 
-  const saveWorkflow = async () => {
+  const publishWorkflow = async () => {
     if (!workflow) {
       alert('Please select or create a workflow first');
       return;
@@ -217,138 +197,20 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
       };
 
       const updatedWorkflow = await workflowApi.updateWorkflow(workflow.id, {
-        config: JSON.stringify(config)
+        config: JSON.stringify(config),
+        status: WorkflowStatus.ACTIVE // Set status to active when publishing
       });
 
       if (onSave) {
         onSave(updatedWorkflow);
       }
 
-      alert('Workflow saved successfully!');
+      alert('Workflow published successfully!');
     } catch (err) {
-      alert('Failed to save workflow');
-      console.error('Failed to save workflow:', err);
+      alert('Failed to publish workflow');
+      console.error('Failed to publish workflow:', err);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const executeWorkflow = async () => {
-    if (!workflow) {
-      alert('Please select or create a workflow first');
-      return;
-    }
-
-    try {
-      // Save current workflow first
-      await saveWorkflow();
-      
-      // Execute workflow
-      const execution = await executionApi.executeWorkflow(workflow.id);
-      setExecutionStatus(execution.status);
-      
-      // Start polling execution status
-      pollExecutionStatus(execution.id);
-      
-      // Auto switch to Execution Manager page
-      if (onViewExecution) {
-        onViewExecution();
-      }
-    } catch (err) {
-      alert('Failed to start execution');
-      console.error('Failed to start execution:', err);
-    }
-  };
-
-  const pollExecutionStatus = useCallback(async (executionId: number) => {
-    // Clear existing polling if any
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const execution = await executionApi.getExecution(executionId);
-        setExecutionStatus(execution.status);
-        setExecutingNodeId(execution.current_node || null);
-
-        // Node styles are now handled by NodeExecutionList component
-        // No need to update node styles here anymore
-
-        // If execution completed or failed, stop polling
-        if (execution.status === ExecutionStatus.COMPLETED || 
-            execution.status === ExecutionStatus.FAILED) {
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-          setExecutingNodeId(null);
-          // Node styles are handled by NodeExecutionList component
-        }
-      } catch (err) {
-        console.error('Failed to get execution status:', err);
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      }
-    }, 1000);
-
-    // Stop polling after 5 minutes (extended from 30 seconds for human feedback scenarios)
-    setTimeout(() => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    }, 300000);
-  }, []);
-
-  // Method to restart polling (can be called when execution continues)
-  const restartPolling = useCallback((executionId: number) => {
-    pollExecutionStatus(executionId);
-  }, [pollExecutionStatus]);
-
-  // Expose restart polling method globally for human feedback continue
-  useEffect(() => {
-    (window as any).restartWorkflowPolling = restartPolling;
-    return () => {
-      delete (window as any).restartWorkflowPolling;
-    };
-  }, [restartPolling]);
-
-  const getExecutionStatusColor = (status: ExecutionStatus | null) => {
-    if (!status) return 'bg-gray-500';
-    switch (status) {
-      case ExecutionStatus.PENDING:
-        return 'bg-yellow-500';
-      case ExecutionStatus.RUNNING:
-        return 'bg-blue-500';
-      case ExecutionStatus.PAUSED:
-        return 'bg-orange-500';
-      case ExecutionStatus.COMPLETED:
-        return 'bg-green-500';
-      case ExecutionStatus.FAILED:
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-
-  const getExecutionStatusText = (status: ExecutionStatus | null) => {
-    if (!status) return '';
-    switch (status) {
-      case ExecutionStatus.PENDING:
-        return 'Pending';
-      case ExecutionStatus.RUNNING:
-        return 'Running';
-      case ExecutionStatus.PAUSED:
-        return 'Paused';
-      case ExecutionStatus.COMPLETED:
-        return 'Completed';
-      case ExecutionStatus.FAILED:
-        return 'Failed';
-      default:
-        return status;
     }
   };
 
@@ -363,17 +225,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
           </h1>
           
           <div className="flex items-center space-x-3">
-            {/* Execution Status Indicator */}
-            {executionStatus && (
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${getExecutionStatusColor(executionStatus)}`} />
-                <span className="text-sm text-gray-600">
-                  {getExecutionStatusText(executionStatus)}
-                  {executingNodeId && ` - Executing Node: ${executingNodeId}`}
-                </span>
-              </div>
-            )}
-
             {/* Variable Panel Toggle */}
             <button
               onClick={() => setIsVariablePanelOpen(!isVariablePanelOpen)}
@@ -393,36 +244,14 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
             </button>
             
             <button
-              onClick={executeWorkflow}
-              disabled={!workflow || executionStatus === ExecutionStatus.RUNNING}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8m-9-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {executionStatus === ExecutionStatus.RUNNING ? 'Executing...' : 'Execute Workflow'}
-            </button>
-
-            <button
-              onClick={onViewExecution}
-              disabled={!workflow}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Execution Manager
-            </button>
-            
-            <button
-              onClick={saveWorkflow}
+              onClick={publishWorkflow}
               disabled={isSaving || !workflow}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 border border-transparent rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l4-4m0 0l4-4m-4 4v12" />
               </svg>
-              {isSaving ? 'Saving...' : 'Save'}
+              {isSaving ? 'Publishing...' : 'Publish'}
             </button>
           </div>
         </div>
@@ -455,15 +284,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
               <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 111.414-1.414L15 13.586V12a1 1 0 011-1z" clipRule="evenodd"/>
             </svg>
             Condition
-          </button>
-          <button
-            onClick={() => addNode(NodeType.HUMAN_CONTROL)}
-            className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-800 bg-purple-100 border border-purple-200 rounded-lg hover:bg-purple-200 transition-colors"
-          >
-            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
-            </svg>
-            Human Control
           </button>
           <button
             onClick={() => addNode(NodeType.END)}
