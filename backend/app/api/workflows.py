@@ -114,6 +114,18 @@ def parse_workflow_details(config_json: str) -> Dict[str, Any]:
                         if prompt:
                             node_info["user_prompt"] = prompt
                     
+                    # 如果是end节点，设置id为-2
+                    elif node_type == 'end':
+                        node_info["id"] = "-2"
+
+                    # 如果是jira节点，设置id为-3
+                    elif node_type == 'jira':
+                        node_info["id"] = "-3"
+
+                    # 如果是confluence节点，设置id为-4
+                    elif node_type == 'confluence':
+                        node_info["id"] = "-4"
+                    
                     ordered_nodes.append(node_info)
                 
                 # 查找下一个节点

@@ -8,6 +8,8 @@ class NodeType(enum.Enum):
     AGENT = "agent"
     IF = "if"
     END = "end"
+    JIRA = "jira"
+    CONFLUENCE = "confluence"
 
 class Node(Base):
     __tablename__ = "nodes"
