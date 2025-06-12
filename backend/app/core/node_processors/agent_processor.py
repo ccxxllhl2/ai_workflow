@@ -5,6 +5,7 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 from .base_processor import BaseNodeProcessor
 from app.core.variable_manager import VariableManager
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class AgentNodeProcessor(BaseNodeProcessor):
             # 调用外部Agent API
             try:
                 response = requests.post(
-                    "http://localhost:8080/api/chatbycard/chat/completions",
+                    settings.external_agent_chat_url,
                     json={
                         "agentId": agent_id,
                         "userInput": user_input

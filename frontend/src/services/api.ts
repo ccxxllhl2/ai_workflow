@@ -7,10 +7,11 @@ import {
   CreateAgentRequest,
   ExecuteWorkflowRequest
 } from '../types/workflow';
+import { config } from '../config/environment';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: config.apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -156,7 +157,7 @@ export const agentApi = {
 export const externalAgentApi = {
   // 获取所有外部Agent
   getExternalAgents: async () => {
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/external-agents`);
+    const response = await fetch(`${config.apiBaseUrl}/api/external-agents`);
     if (!response.ok) {
       throw new Error('Failed to fetch external agents');
     }

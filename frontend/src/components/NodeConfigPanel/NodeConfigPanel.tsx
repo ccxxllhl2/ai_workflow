@@ -414,7 +414,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   </svg>
                   <div>
                     <p className="font-medium">Unable to get Agent list</p>
-                    <p className="text-xs mt-1">Please ensure the external Agent service is running (port 8080), then click the refresh button to retry.</p>
+                    <p className="text-xs mt-1">Please ensure the external Agent service is running, then click the refresh button to retry.</p>
                   </div>
                 </div>
               </div>
@@ -475,7 +475,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 </button>
               ))}
             </div>
-          </div>
+        </div>
         )}
       </div>
     </div>

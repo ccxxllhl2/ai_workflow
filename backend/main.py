@@ -4,6 +4,7 @@ import requests
 import logging
 from app.database.database import engine, Base
 from app.api import workflows, agents
+from app.config.settings import settings
 
 # 导入所有模型以确保表被创建
 from app.models.workflow import Workflow
@@ -23,7 +24,7 @@ EXTERNAL_AGENTS = []
 async def fetch_external_agents():
     """获取外部Agent信息"""
     try:
-        response = requests.get("http://localhost:8080/api/chatbycard/agents", timeout=10)
+        response = requests.get(settings.external_agents_list_url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data.get('success') and data.get('data'):
@@ -57,7 +58,7 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001"],  # React开发服务器
+    allow_origins=settings.ALLOWED_ORIGINS,  # 从环境变量读取允许的域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,4 +93,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True) 
