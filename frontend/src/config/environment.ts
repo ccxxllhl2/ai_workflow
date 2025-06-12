@@ -1,10 +1,10 @@
 // 环境变量配置
 export const config = {
   // API基础URL
-  apiBaseUrl: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000',
+  apiBaseUrl: process.env.REACT_APP_API_BASE_URL,
   
   // 外部Agent服务URL  
-  externalAgentUrl: process.env.REACT_APP_EXTERNAL_AGENT_URL || 'http://localhost:8080',
+  externalAgentUrl: process.env.REACT_APP_EXTERNAL_AGENT_URL,
   
   // 完整的API URL
   get apiUrl() {

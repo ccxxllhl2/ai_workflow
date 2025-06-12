@@ -30,7 +30,8 @@
     "web-vitals": "^3.5.2"
   },
   "scripts": {
-    "start": "set HOST=0.0.0.0 && set PORT=3001 && react-scripts start",
+    "start": "set PORT=3001 && react-scripts start",
+    "start:network": "set DANGEROUSLY_DISABLE_HOST_CHECK=true && set PORT=3001 && react-scripts start",
     "build": "react-scripts build",
     "eject": "react-scripts eject",
     "lint": "eslint src --ext .ts,.tsx",
