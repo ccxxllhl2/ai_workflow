@@ -10,7 +10,7 @@ from app.models.workflow import Workflow
 from app.models.execution import Execution
 from app.models.schemas import (
     WorkflowCreate, WorkflowUpdate, WorkflowResponse, WorkflowWithArgsResponse,
-    WorkflowWithDetailsResponse, VariableInfo, WorkflowExportData, WorkflowImportRequest, 
+    WorkflowWithDetailsResponse, VariableInfo, NodeInfo, WorkflowExportData, WorkflowImportRequest, 
     WorkflowImportResponse, WorkflowExecuteRequest, RunWorkflowRequest, RunWorkflowResponse
 )
 from app.core.workflow_engine import WorkflowEngine
@@ -94,7 +94,27 @@ def parse_workflow_details(config_json: str) -> Dict[str, Any]:
                     # 获取节点显示名称，优先使用label，否则使用id
                     node_data = current_node.get('data', {})
                     node_label = node_data.get('label', current_node_id)
-                    ordered_nodes.append(node_label)
+                    node_type = current_node.get('type', '')
+                    
+                    # 创建NodeInfo对象
+                    node_info = {
+                        "name": node_label,
+                        "id": "-1",  # 默认值
+                        "user_prompt": "null"  # 默认值
+                    }
+                    
+                    # 如果是agent节点，提取agentId和prompt
+                    if node_type == 'agent':
+                        node_config = node_data.get('config', {})
+                        agent_id = node_config.get('agentId', '')
+                        prompt = node_config.get('prompt', '')
+                        
+                        if agent_id:
+                            node_info["id"] = agent_id
+                        if prompt:
+                            node_info["user_prompt"] = prompt
+                    
+                    ordered_nodes.append(node_info)
                 
                 # 查找下一个节点
                 next_node_id = None
@@ -138,6 +158,15 @@ async def get_workflows(
                 description=var_info['description']
             ))
         
+        # 转换nodes为NodeInfo对象列表
+        node_info_list = []
+        for node_info in details['nodes']:
+            node_info_list.append(NodeInfo(
+                name=node_info['name'],
+                id=node_info['id'],
+                user_prompt=node_info['user_prompt']
+            ))
+        
         workflow_response = WorkflowWithDetailsResponse(
             id=workflow.id,
             name=workflow.name,
@@ -146,7 +175,7 @@ async def get_workflows(
             status=workflow.status,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
-            nodes=details['nodes'],
+            nodes=node_info_list,
             vars=variable_info_list
         )
         result.append(workflow_response)

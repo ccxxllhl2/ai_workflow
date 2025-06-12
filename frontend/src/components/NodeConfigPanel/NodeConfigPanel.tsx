@@ -45,7 +45,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             const { initialVariables, ...cleanConfig } = nodeConfig;
             nodeConfig = cleanConfig;
           }
-          loadExternalAgents();
+        loadExternalAgents();
           break;
         case NodeType.IF:
         case NodeType.END:
@@ -68,7 +68,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       const response = await externalAgentApi.getExternalAgents();
       setExternalAgents(response.agents || []);
     } catch (error) {
-      console.error('获取外部Agent失败:', error);
+      console.error('Failed to get external agents:', error);
     } finally {
       setLoading(false);
     }
@@ -127,11 +127,54 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     }
   };
 
+  const promptTextAreaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // 生成变量的颜色，基于变量名的哈希值
+  const getVariableColor = (varName: string) => {
+    const colors = [
+      'bg-blue-100 text-blue-800 border-blue-200',
+      'bg-green-100 text-green-800 border-green-200', 
+      'bg-purple-100 text-purple-800 border-purple-200',
+      'bg-orange-100 text-orange-800 border-orange-200',
+      'bg-pink-100 text-pink-800 border-pink-200',
+      'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'bg-teal-100 text-teal-800 border-teal-200',
+      'bg-yellow-100 text-yellow-800 border-yellow-200'
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < varName.length; i++) {
+      hash = ((hash << 5) - hash + varName.charCodeAt(i)) & 0xffffffff;
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // 在textarea光标位置插入文本
+  const insertTextAtCursor = (text: string) => {
+    const textarea = promptTextAreaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentValue = config.prompt || '';
+    
+    const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+    
+    setConfig({ ...config, prompt: newValue });
+    
+    // 重新聚焦并设置光标位置
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + text.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
   const renderStartNodeConfig = () => {
     // 确保只在Start节点中处理初始变量
-    if (node?.type !== NodeType.START) {
+    if (!node || node.type !== NodeType.START) {
       console.error('renderStartNodeConfig 被错误地调用于非Start节点:', node?.type);
-      return <div>配置错误：这不是Start节点</div>;
+      return <div>Configuration Error: This is not a Start node</div>;
     }
 
     // 解析当前的初始变量
@@ -252,47 +295,47 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-3">
-            工作流参数定义
+            Workflow Parameter Definition
           </label>
           <div className="space-y-3">
             {variableEntries.map(([key, value, description]: [string, string, string], index: number) => (
               <div key={index} className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={key}
-                      onChange={(e) => updateVariable(index, e.target.value, value)}
-                      placeholder="参数名称"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(e) => updateVariable(index, key, e.target.value)}
-                      placeholder="默认值"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeVariable(index)}
-                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-                    title="删除参数"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={key}
+                    onChange={(e) => updateVariable(index, e.target.value, value)}
+                    placeholder="Parameter Name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => updateVariable(index, key, e.target.value)}
+                    placeholder="Default Value"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeVariable(index)}
+                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                  title="Delete Parameter"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
                 </div>
                 <div className="ml-0">
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => updateVariable(index, key, value, e.target.value)}
-                    placeholder="参数描述"
+                    placeholder="Parameter Description"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
                   />
                 </div>
@@ -307,7 +350,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              <span>添加参数</span>
+              <span>Add Parameter</span>
             </button>
           </div>
           
@@ -317,11 +360,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">参数说明：</p>
+                <p className="font-medium mb-1">Parameter Instructions:</p>
                 <ul className="text-xs space-y-1">
-                  <li>• 这些参数将作为工作流的输入参数</li>
-                  <li>• 调用API时需要提供这些参数的值</li>
-                  <li>• 默认值仅用于编辑器预览，实际运行时会被API传入的值覆盖</li>
+                  <li>• These parameters will serve as input parameters for the workflow</li>
+                  <li>• You need to provide values for these parameters when calling the API</li>
+                  <li>• Default values are only used for editor preview, actual runtime values will be overridden by API input</li>
                 </ul>
               </div>
             </div>
@@ -331,81 +374,38 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     );
   };
 
-  const promptTextAreaRef = useRef<HTMLTextAreaElement>(null);
-  
-  // 生成变量的颜色，基于变量名的哈希值
-  const getVariableColor = (varName: string) => {
-    const colors = [
-      'bg-blue-100 text-blue-800 border-blue-200',
-      'bg-green-100 text-green-800 border-green-200', 
-      'bg-purple-100 text-purple-800 border-purple-200',
-      'bg-orange-100 text-orange-800 border-orange-200',
-      'bg-pink-100 text-pink-800 border-pink-200',
-      'bg-indigo-100 text-indigo-800 border-indigo-200',
-      'bg-teal-100 text-teal-800 border-teal-200',
-      'bg-yellow-100 text-yellow-800 border-yellow-200'
-    ];
-    
-    let hash = 0;
-    for (let i = 0; i < varName.length; i++) {
-      hash = ((hash << 5) - hash + varName.charCodeAt(i)) & 0xffffffff;
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
-
-  // 在textarea光标位置插入文本
-  const insertTextAtCursor = (text: string) => {
-    const textarea = promptTextAreaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentValue = config.prompt || '';
-    
-    const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
-    
-    setConfig({ ...config, prompt: newValue });
-    
-    // 重新聚焦并设置光标位置
-    setTimeout(() => {
-      textarea.focus();
-      const newCursorPos = start + text.length;
-      textarea.setSelectionRange(newCursorPos, newCursorPos);
-    }, 0);
-  };
-
   const renderAgentNodeConfig = () => {
     // 获取所有可用变量
     const availableVariables = extractVariablesFromNodes(allNodes);
     
     return (
-      <div className="space-y-4">
-        <div>
+    <div className="space-y-4">
+      <div>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
-              选择Agent
-            </label>
+          Select Agent
+        </label>
             <button
               onClick={loadExternalAgents}
               disabled={loading}
               className="text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400 flex items-center gap-1"
-              title="刷新Agent列表"
+              title="Refresh Agent List"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              刷新
+              Refresh
             </button>
           </div>
-          {loading ? (
-            <div className="text-sm text-gray-500">正在加载Agent列表...</div>
+        {loading ? (
+          <div className="text-sm text-gray-500">Loading Agent list...</div>
           ) : externalAgents.length === 0 ? (
             <div className="space-y-2">
               <select
                 disabled
                 className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-400"
               >
-                <option>暂无可用的Agent</option>
+                <option>No available Agents</option>
               </select>
               <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
                 <div className="flex items-start space-x-2">
@@ -413,80 +413,73 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                   <div>
-                    <p className="font-medium">无法获取Agent列表</p>
-                    <p className="text-xs mt-1">请确保外部Agent服务正在运行（端口8080），然后点击刷新按钮重试。</p>
+                    <p className="font-medium">Unable to get Agent list</p>
+                    <p className="text-xs mt-1">Please ensure the external Agent service is running (port 8080), then click the refresh button to retry.</p>
                   </div>
                 </div>
               </div>
             </div>
-          ) : (
-            <select
-              value={config.agentId || ''}
-              onChange={(e) => setConfig({ ...config, agentId: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">请选择Agent</option>
-              {externalAgents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        ) : (
+          <select
+            value={config.agentId || ''}
+            onChange={(e) => setConfig({ ...config, agentId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Please Select Agent</option>
+            {externalAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
-        {selectedAgent && (
-          <div className="bg-gray-50 p-3 rounded-md">
-            <h4 className="font-medium text-gray-800 mb-2">Agent信息</h4>
-            <p className="text-sm text-gray-600">
-              <strong>描述:</strong> {selectedAgent.description}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              <strong>模型:</strong> {selectedAgent.modelName}
-            </p>
+      {selectedAgent && (
+        <div className="bg-gray-50 p-3 rounded-md">
+          <h4 className="font-medium text-gray-800 mb-2">Agent Information</h4>
+          <p className="text-sm text-gray-600">
+            <strong>Description:</strong> {selectedAgent.description}
+          </p>
+          <p className="text-sm text-gray-600 mt-1">
+            <strong>Model:</strong> {selectedAgent.modelName}
+          </p>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Prompt Template
+        </label>
+        <textarea
+          ref={promptTextAreaRef}
+          value={config.prompt || ''}
+          onChange={(e) => setConfig({ ...config, prompt: e.target.value })}
+          placeholder="You can use {{variable_name}} to reference variables, or directly input prompts..."
+          rows={6}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-vertical"
+        />
+        
+        {availableVariables.length > 0 && (
+          <div className="mt-2">
+            <div className="text-xs text-gray-600 mb-2">Click variable tags to insert into prompt:</div>
+            <div className="flex flex-wrap gap-1">
+              {availableVariables.map((variable) => (
+                <button
+                  key={`${variable.nodeId}-${variable.name}`}
+                  onClick={() => insertTextAtCursor(`{{${variable.name}}}`)}
+                  className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border transition-colors hover:shadow-sm ${getVariableColor(variable.name)}`}
+                  title={`From ${variable.nodeLabel} (${variable.nodeType})`}
+                >
+                  {variable.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            输入提示词 (可选)
-          </label>
-          <textarea
-            ref={promptTextAreaRef}
-            value={config.prompt || ''}
-            onChange={(e) => setConfig({ ...config, prompt: e.target.value })}
-            placeholder="可以使用{{变量名}}引用变量，或者直接输入提示词..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            rows={4}
-          />
-          
-          {/* 变量标签 */}
-          {availableVariables.length > 0 && (
-            <div className="mt-3">
-              <div className="text-xs text-gray-600 mb-2">点击变量标签插入到提示词中：</div>
-              <div className="flex flex-wrap gap-2">
-                {availableVariables.map((variable, index) => (
-                  <button
-                    key={`${variable.nodeId}-${variable.name}-${index}`}
-                    type="button"
-                    onClick={() => insertTextAtCursor(`{{${variable.name}}}`)}
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition-opacity ${getVariableColor(variable.name)}`}
-                    title={`来自: ${variable.nodeLabel} (${variable.source === 'initial' ? '初始变量' : '输出变量'})`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-current opacity-60 mr-1"></span>
-                    {variable.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="text-xs text-gray-500 mt-2">
-            如果不填写，将直接使用前一个节点的输出作为Agent的输入
-          </div>
-        </div>
       </div>
-    );
+    </div>
+  );
   };
 
   const renderIfNodeConfig = () => (
@@ -536,22 +529,19 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   );
 
   const renderEndNodeConfig = () => (
-    <div className="space-y-4">
-      <div className="p-4 bg-green-50 rounded-md border border-green-200">
-        <div className="flex items-start space-x-3">
-          <svg className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+    <div className="bg-green-50 p-4 rounded-md border border-green-200">
+      <div className="flex items-start space-x-3">
+        <div className="flex-shrink-0">
+          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
-          <div>
-            <h4 className="text-sm font-medium text-green-800 mb-2">结束节点</h4>
-            <p className="text-sm text-green-700 mb-3">
-              结束节点会自动将上一个节点的输出作为工作流的最终结果返回。
-            </p>
-            <div className="text-xs text-green-600 space-y-1">
-              <p>• 无需任何配置</p>
-              <p>• 自动输出字符串格式的结果</p>
-              <p>• 标记工作流执行完成</p>
-            </div>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-green-800 mb-2">End Node</h4>
+          <div className="text-sm text-green-700 space-y-1">
+            <p>• No configuration required</p>
+            <p>• Automatically outputs string-formatted results</p>
+            <p>• Marks workflow execution as complete</p>
           </div>
         </div>
       </div>

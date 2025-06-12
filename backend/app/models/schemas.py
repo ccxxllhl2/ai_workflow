@@ -54,9 +54,15 @@ class VariableInfo(BaseModel):
     name: str
     description: str
 
+class NodeInfo(BaseModel):
+    """节点信息"""
+    name: str
+    id: str  # 对于agent节点是远端agent的id，其他节点为"-1"
+    user_prompt: str  # 对于agent节点是用户配置的提示词，其他节点为"null"
+
 class WorkflowWithDetailsResponse(WorkflowResponse):
     """工作流响应，包含节点和变量信息"""
-    nodes: List[str] = []  # 按执行顺序的节点名称列表
+    nodes: List[NodeInfo] = []  # 按执行顺序的节点信息列表
     vars: List[VariableInfo] = []   # start节点的变量列表 [{"name": "var1", "description": "desc"}]
 
 # 工作流执行请求

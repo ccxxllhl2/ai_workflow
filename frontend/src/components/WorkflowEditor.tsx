@@ -144,7 +144,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
         };
       case NodeType.AGENT:
         return { 
-          prompt: '',
+          prompt: '', 
           modelType: 'qwen',
           modelName: 'qwen-turbo'
         };
@@ -248,7 +248,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
       const result = await workflowApi.executeWorkflow(workflow.id, {
         variables: {}
       });
-      alert(`${result.message}\n检查后端日志以查看执行详情`);
+      alert(`${result.message}\nCheck backend logs for execution details`);
     } catch (err) {
       alert('Failed to execute workflow');
       console.error('Failed to execute workflow:', err);
