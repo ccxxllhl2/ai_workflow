@@ -55,6 +55,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+print(settings.ALLOWED_ORIGINS)
+
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
