@@ -548,6 +548,193 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     </div>
   );
 
+  const renderJiraNodeConfig = () => (
+    <div className="space-y-4">
+      <div className="bg-blue-50 p-4 rounded-md border border-blue-200 mb-4">
+        <div className="flex items-start space-x-3">
+          <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.004-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129V13.1a5.218 5.218 0 0 0 5.232-5.215V6.782a1.024 1.024 0 0 0-1.018-1.025zM23.013.592H11.455a5.215 5.215 0 0 0 5.215 5.214h2.129V7.863a5.218 5.218 0 0 0 5.232-5.215V1.617A1.024 1.024 0 0 0 23.013.592z"/>
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-blue-800 mb-2">Jira Integration (Coming Soon)</h4>
+            <div className="text-sm text-blue-700 space-y-1">
+              <p>• Create, update, and query Jira issues</p>
+              <p>• Automate project workflows</p>
+              <p>• Integration with Jira API</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Project Key
+        </label>
+        <input
+          type="text"
+          value={config.project || ''}
+          onChange={(e) => setConfig({ ...config, project: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="e.g., PROJ"
+          disabled
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Issue Type
+        </label>
+        <select
+          value={config.issueType || ''}
+          onChange={(e) => setConfig({ ...config, issueType: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled
+        >
+          <option value="">Select Issue Type</option>
+          <option value="story">Story</option>
+          <option value="task">Task</option>
+          <option value="bug">Bug</option>
+          <option value="epic">Epic</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Assignee
+        </label>
+        <input
+          type="text"
+          value={config.assignee || ''}
+          onChange={(e) => setConfig({ ...config, assignee: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="e.g., john.doe@company.com"
+          disabled
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Status
+        </label>
+        <select
+          value={config.status || ''}
+          onChange={(e) => setConfig({ ...config, status: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled
+        >
+          <option value="">Select Status</option>
+          <option value="to-do">To Do</option>
+          <option value="in-progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+
+      <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
+        <div className="flex items-start space-x-2">
+          <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <div className="text-sm text-amber-800">
+            <p className="font-medium">Preview Feature</p>
+            <p className="text-xs mt-1">This node is for demonstration purposes. Jira integration will be available in a future release.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderConfluenceNodeConfig = () => (
+    <div className="space-y-4">
+      <div className="bg-indigo-50 p-4 rounded-md border border-indigo-200 mb-4">
+        <div className="flex items-start space-x-3">
+          <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M.87 19.492c.494 1.516 1.528 2.594 3.01 3.14.49.18.995.252 1.528.22 1.51-.09 2.84-.99 3.61-2.45l4.75-9.03c1.21-2.3 3.99-3.19 6.29-1.98 2.3 1.21 3.19 3.99 1.98 6.29l-1.65 3.14c-.15.29-.03.65.26.8.29.15.65.03.8-.26l1.65-3.14c1.8-3.42.37-7.71-3.05-9.51-3.42-1.8-7.71-.37-9.51 3.05L4.77 18.832c-.54 1.02-1.47 1.65-2.53 1.71-.36.02-.71-.03-1.07-.15-1.04-.38-1.78-1.14-2.15-2.2-.15-.42-.05-.87.32-1.02.37-.15.83-.03.98.35zm22.26-14.98c-.49-1.516-1.528-2.594-3.01-3.14-.49-.18-.995-.252-1.528-.22-1.51.09-2.84.99-3.61 2.45l-4.75 9.03c-1.21 2.3-3.99 3.19-6.29 1.98-2.3-1.21-3.19-3.99-1.98-6.29l1.65-3.14c.15-.29.03-.65-.26-.8-.29-.15-.65-.03-.8.26l-1.65 3.14c-1.8 3.42-.37 7.71 3.05 9.51 3.42 1.8 7.71.37 9.51-3.05L19.23 5.168c.54-1.02 1.47-1.65 2.53-1.71.36-.02.71.03 1.07.15 1.04.38 1.78 1.14 2.15 2.2.15.42.05.87-.32 1.02-.37.15-.83.03-.98-.35z"/>
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-indigo-800 mb-2">Confluence Integration (Coming Soon)</h4>
+            <div className="text-sm text-indigo-700 space-y-1">
+              <p>• Create and update Confluence pages</p>
+              <p>• Search and retrieve knowledge base content</p>
+              <p>• Integration with Confluence API</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Space Key
+        </label>
+        <input
+          type="text"
+          value={config.spaceKey || ''}
+          onChange={(e) => setConfig({ ...config, spaceKey: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="e.g., TEAM"
+          disabled
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Page Title
+        </label>
+        <input
+          type="text"
+          value={config.pageTitle || ''}
+          onChange={(e) => setConfig({ ...config, pageTitle: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="e.g., Project Documentation"
+          disabled
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Page URL
+        </label>
+        <input
+          type="url"
+          value={config.pageUrl || ''}
+          onChange={(e) => setConfig({ ...config, pageUrl: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="https://company.atlassian.net/wiki/spaces/TEAM/pages/..."
+          disabled
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Content Template
+        </label>
+        <textarea
+          value={config.content || ''}
+          onChange={(e) => setConfig({ ...config, content: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          rows={4}
+          placeholder="Page content template..."
+          disabled
+        />
+      </div>
+
+      <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
+        <div className="flex items-start space-x-2">
+          <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <div className="text-sm text-amber-800">
+            <p className="font-medium">Preview Feature</p>
+            <p className="text-xs mt-1">This node is for demonstration purposes. Confluence integration will be available in a future release.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderNodeConfig = () => {
     if (!node) return null;
 
@@ -556,6 +743,10 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return renderStartNodeConfig();
       case NodeType.AGENT:
         return renderAgentNodeConfig();
+      case NodeType.JIRA:
+        return renderJiraNodeConfig();
+      case NodeType.CONFLUENCE:
+        return renderConfluenceNodeConfig();
       case NodeType.IF:
         return renderIfNodeConfig();
       case NodeType.END:
@@ -576,6 +767,10 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return 'Start Node';
       case NodeType.AGENT:
         return 'Agent Node';
+      case NodeType.JIRA:
+        return 'Jira Node';
+      case NodeType.CONFLUENCE:
+        return 'Confluence Node';
       case NodeType.IF:
         return 'Condition Node';
       case NodeType.END:

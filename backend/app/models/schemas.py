@@ -14,6 +14,8 @@ class NodeTypeEnum(str, Enum):
     AGENT = "agent"
     IF = "if"
     END = "end"
+    JIRA = "jira"
+    CONFLUENCE = "confluence"
 
 class VariableTypeEnum(str, Enum):
     STRING = "string"

@@ -10,7 +10,9 @@ export enum NodeType {
   START = 'start',
   AGENT = 'agent',
   IF = 'if',
-  END = 'end'
+  END = 'end',
+  JIRA = 'jira',
+  CONFLUENCE = 'confluence'
 }
 
 // Variable type enum
