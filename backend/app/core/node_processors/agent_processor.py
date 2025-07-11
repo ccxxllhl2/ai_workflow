@@ -2,12 +2,29 @@ import json
 import asyncio
 import os
 import aiohttp
+from pathlib import Path
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from openai import AsyncOpenAI
+from dotenv import load_dotenv
 from app.core.node_processors.base_processor import BaseNodeProcessor
 from app.core.variable_manager import VariableManager
 from app.models.agent import Agent
+
+# 加载根目录的.env文件
+# 获取当前文件的路径，然后向上找到项目根目录
+current_file = Path(__file__)
+project_root = current_file.parent.parent.parent.parent.parent  # backend/app/core/node_processors/ -> ai_workflow根目录
+env_path = project_root / '.env'
+
+# 检查.env文件是否存在并加载
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"✓ 成功加载环境变量文件: {env_path}")
+else:
+    print(f"⚠️  环境变量文件不存在: {env_path}")
+    # 尝试从默认位置加载
+    load_dotenv()
 
 class AgentNodeProcessor(BaseNodeProcessor):
     """Agent节点处理器"""
@@ -126,9 +143,11 @@ class AgentNodeProcessor(BaseNodeProcessor):
         """调用千问API"""
         try:
             # 从环境变量获取Token
-            qwen_token = os.getenv('QwenToken')
+            # qwen_token = os.getenv('QwenToken')
+            qwen_token = "sk-6675f39e30ba44dcabbc605e0e9820c2"
             if not qwen_token:
-                return "[错误] 未配置QwenToken环境变量"
+                available_env_vars = [key for key in os.environ.keys() if 'qwen' in key.lower()]
+                return f"[错误] 未配置QwenToken环境变量。当前环境中的相关变量: {available_env_vars}"
             
             # 千问API配置
             base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -174,7 +193,8 @@ class AgentNodeProcessor(BaseNodeProcessor):
             # 从环境变量获取API Key
             openai_api_key = os.getenv('OPENAI_API_KEY')
             if not openai_api_key:
-                return "[错误] 未配置OPENAI_API_KEY环境变量"
+                available_env_vars = [key for key in os.environ.keys() if 'openai' in key.lower()]
+                return f"[错误] 未配置OPENAI_API_KEY环境变量。当前环境中的相关变量: {available_env_vars}"
             
             # 创建OpenAI客户端
             client = AsyncOpenAI(api_key=openai_api_key)

@@ -152,8 +152,23 @@ class WorkflowEngine:
             variables = await self.variable_manager.get_all_variables(execution_id)
             variables_json = json.dumps(variables, ensure_ascii=False) if variables else "{}"
             
-            # 获取节点名称
-            node_name = node.get('data', {}).get('label', node.get('id', 'Unknown Node'))
+            # 获取节点名称 - 优先使用用户自定义名称
+            node_data = node.get('data', {})
+            node_config = node_data.get('config', {})
+            
+            # 如果config是字符串，尝试解析JSON
+            if isinstance(node_config, str):
+                try:
+                    node_config = json.loads(node_config)
+                except json.JSONDecodeError:
+                    node_config = {}
+            
+            # 优先级：config.label > data.label > node.id
+            node_name = (
+                node_config.get('label') or 
+                node_data.get('label') or 
+                node.get('id', 'Unknown Node')
+            )
             
             history_record = ExecutionHistory(
                 execution_id=execution_id,

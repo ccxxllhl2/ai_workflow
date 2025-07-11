@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import WorkflowManager from './components/WorkflowManager/WorkflowManager';
 import WorkflowEditor from './components/WorkflowEditor';
 import ExecutionView from './components/ExecutionView/ExecutionView';
-import Login from './components/Login/Login';
 import { Workflow } from './types/workflow';
-import { User } from './services/api';
 import './App.css';
 
 enum AppView {
@@ -16,17 +14,6 @@ enum AppView {
 function App() {
   const [currentView, setCurrentView] = useState<AppView>(AppView.MANAGER);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setSelectedWorkflow(null);
-    setCurrentView(AppView.MANAGER);
-  };
 
   const handleSelectWorkflow = (workflow: Workflow) => {
     setSelectedWorkflow(workflow);
@@ -54,29 +41,24 @@ function App() {
     }
   };
 
-  // If not logged in, show login page
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
-
   const getViewIcon = (view: AppView) => {
     switch (view) {
       case AppView.MANAGER:
         return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
         );
       case AppView.EDITOR:
         return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"/>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
         );
       case AppView.EXECUTION:
         return (
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"/>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6-4h8m-12 8v3a2 2 0 002 2h8a2 2 0 002-2v-3" />
           </svg>
         );
       default:
@@ -102,9 +84,9 @@ function App() {
             </div>
           </div>
 
-          {/* Navigation Buttons and User Info */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1">
+          {/* Navigation Buttons */}
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 bg-white/60 backdrop-blur-sm rounded-lg p-1">
               <button
                 onClick={() => setCurrentView(AppView.MANAGER)}
                 className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
@@ -114,18 +96,15 @@ function App() {
                 }`}
               >
                 {getViewIcon(AppView.MANAGER)}
-                <span>Workflows</span>
+                <span>Manager</span>
               </button>
-              
+
               <button
                 onClick={() => setCurrentView(AppView.EDITOR)}
-                disabled={!selectedWorkflow && currentView !== AppView.EDITOR}
                 className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 flex items-center space-x-2 ${
                   currentView === AppView.EDITOR
                     ? 'bg-gradient-to-r from-gray-900 to-gray-800 text-white shadow-lg transform scale-105'
-                    : selectedWorkflow
-                    ? 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
-                    : 'text-gray-400 cursor-not-allowed opacity-50'
+                    : 'text-gray-700 hover:text-gray-900 hover:bg-white/70 hover:shadow-md'
                 }`}
               >
                 {getViewIcon(AppView.EDITOR)}
@@ -147,58 +126,25 @@ function App() {
                 <span>Execution</span>
               </button>
             </div>
-
-            {/* User Info and Logout */}
-            <div className="flex items-center space-x-3 pl-4 border-l border-gray-200">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {currentUser.username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <span className="text-sm font-medium text-gray-700">{currentUser.username}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white/70 rounded-lg transition-colors"
-                title="Logout"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
           </div>
         </div>
-
-        {/* Breadcrumb */}
-        {selectedWorkflow && (
-          <div className="pb-4 flex items-center space-x-2 text-sm text-gray-600">
-            <span className="font-medium text-gray-900">{selectedWorkflow.name}</span>
-            <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium shadow-sm ${
-              selectedWorkflow.status === 'active' 
-                ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200' 
-                : selectedWorkflow.status === 'draft'
-                ? 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border border-yellow-200'
-                : 'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-800 border border-gray-200'
-            }`}>
-              {selectedWorkflow.status}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );
 
   const renderCurrentView = () => {
+    const getViewAnimation = (view: AppView) => {
+      // All views use the same fade-in animation for consistent experience
+      return "animate-fade-in";
+    };
+
+    const viewContent = (() => {
     switch (currentView) {
       case AppView.MANAGER:
         return (
           <WorkflowManager
             onSelectWorkflow={handleSelectWorkflow}
             onCreateNewWorkflow={handleCreateNewWorkflow}
-            currentUser={currentUser}
           />
         );
       case AppView.EDITOR:
@@ -231,6 +177,13 @@ function App() {
           </div>
         );
     }
+    })();
+
+    return (
+      <div className={getViewAnimation(currentView)}>
+        {viewContent}
+      </div>
+    );
   };
 
   return (

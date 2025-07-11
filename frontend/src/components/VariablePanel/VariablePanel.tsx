@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Variable } from '../../utils/variableExtractor';
 import { NodeType } from '../../types/workflow';
 
@@ -9,6 +9,46 @@ interface VariablePanelProps {
 }
 
 const VariablePanel: React.FC<VariablePanelProps> = ({ variables, isOpen, onToggle }) => {
+  const [copiedVariable, setCopiedVariable] = useState<string | null>(null);
+
+  const handleVariableClick = async (variableName: string) => {
+    const jinjaText = `{{${variableName}}}`;
+    
+    try {
+      await navigator.clipboard.writeText(jinjaText);
+      setCopiedVariable(variableName);
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedVariable(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      // Fallback: try to insert into focused input element
+      const activeElement = document.activeElement as HTMLInputElement | HTMLTextAreaElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        const start = activeElement.selectionStart || 0;
+        const end = activeElement.selectionEnd || 0;
+        const value = activeElement.value;
+        const newValue = value.substring(0, start) + jinjaText + value.substring(end);
+        activeElement.value = newValue;
+        
+        // Trigger input event to update React state
+        const event = new Event('input', { bubbles: true });
+        activeElement.dispatchEvent(event);
+        
+        // Set cursor position after inserted text
+        const newCursorPos = start + jinjaText.length;
+        activeElement.setSelectionRange(newCursorPos, newCursorPos);
+        activeElement.focus();
+        
+        setCopiedVariable(variableName);
+        setTimeout(() => {
+          setCopiedVariable(null);
+        }, 2000);
+      }
+    }
+  };
   const getNodeTypeIcon = (nodeType: NodeType) => {
     switch (nodeType) {
       case NodeType.START:
@@ -119,11 +159,41 @@ const VariablePanel: React.FC<VariablePanelProps> = ({ variables, isOpen, onTogg
                 <div className="space-y-2">
                   {group.variables.map((variable, index) => (
                     <div key={`${variable.nodeId}-${variable.name}-${index}`} 
-                         className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                      <div className="flex items-center space-x-2 flex-1 min-w-0">
-                        <code className="text-sm font-mono text-gray-900 truncate">
+                         onClick={() => handleVariableClick(variable.name)}
+                         className={`group flex items-center justify-between p-3 bg-white rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-md hover:border-blue-300 ${
+                           copiedVariable === variable.name 
+                             ? 'border-green-300 bg-green-50' 
+                             : 'border-gray-200 hover:bg-blue-50'
+                         }`}
+                         title={copiedVariable === variable.name ? 'Copied to clipboard!' : 'Click to copy Jinja2 syntax'}>
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className="flex-shrink-0">
+                          {copiedVariable === variable.name ? (
+                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <code className={`text-sm font-mono truncate block ${
+                            copiedVariable === variable.name 
+                              ? 'text-green-800' 
+                              : 'text-gray-900 group-hover:text-blue-900'
+                          }`}>
                           {variable.name}
                         </code>
+                          <div className={`text-xs font-mono truncate ${
+                            copiedVariable === variable.name 
+                              ? 'text-green-600' 
+                              : 'text-gray-500 group-hover:text-blue-600'
+                          }`}>
+                            {copiedVariable === variable.name ? 'Copied!' : `{{${variable.name}}}`}
+                          </div>
+                        </div>
                       </div>
                       <div className="flex-shrink-0">
                         {getSourceBadge(variable.source)}
@@ -139,7 +209,7 @@ const VariablePanel: React.FC<VariablePanelProps> = ({ variables, isOpen, onTogg
 
       {/* Footer */}
       <div className="border-t border-gray-200 p-4 bg-gray-50">
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 mb-3">
           <div className="flex items-center justify-between mb-1">
             <span>Total Variables:</span>
             <span className="font-medium">{variables.length}</span>
@@ -147,6 +217,19 @@ const VariablePanel: React.FC<VariablePanelProps> = ({ variables, isOpen, onTogg
           <div className="flex items-center justify-between">
             <span>Nodes:</span>
             <span className="font-medium">{Object.keys(groupedVariables).length}</span>
+          </div>
+        </div>
+        
+        {/* Usage Instructions */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-start space-x-2">
+            <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+            </svg>
+            <div className="text-xs text-blue-800">
+              <p className="font-medium mb-1">Click to Use</p>
+              <p>Click any variable to copy its Jinja2 syntax to clipboard or auto-insert into focused input field.</p>
+            </div>
           </div>
         </div>
       </div>

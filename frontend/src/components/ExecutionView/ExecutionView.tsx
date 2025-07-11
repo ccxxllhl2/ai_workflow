@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Execution, ExecutionStatus } from '../../types/workflow';
-import { executionApi } from '../../services/api';
+import { Execution, ExecutionStatus, WorkflowNode } from '../../types/workflow';
+import { executionApi, workflowApi } from '../../services/api';
 import HumanFeedback from './HumanFeedback';
 import NodeExecutionList from './NodeExecutionList';
+import ReactMarkdown from 'react-markdown';
 
 interface ExecutionViewProps {
   workflowId?: number;
@@ -30,41 +31,156 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
   const [expandedVariables, setExpandedVariables] = useState<Record<string, boolean>>({});
   const [currentPollingId, setCurrentPollingId] = useState<number | null>(null);
   const [lastHistoryUpdateTime, setLastHistoryUpdateTime] = useState<number>(0);
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const loadWorkflowConfiguration = useCallback(async () => {
+    if (!workflowId) return;
+
+    try {
+      const workflow = await workflowApi.getWorkflow(workflowId);
+      const config = JSON.parse(workflow.config);
+      setWorkflowNodes(config.nodes || []);
+    } catch (err) {
+      console.error('Failed to load workflow configuration:', err);
+      setWorkflowNodes([]);
+    }
+  }, [workflowId]);
 
   const loadExecutions = useCallback(async () => {
     if (!workflowId) return;
 
     try {
-      setLoading(true);
       const data = await executionApi.getExecutions(workflowId);
-      setExecutions(data);
+      // Sort executions by creation time (newest first)
+      const sortedData = data.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+      setExecutions(sortedData);
       setError(null);
       
       // Auto-select the latest execution record if no execution is currently selected
-      if (data.length > 0 && !selectedExecution) {
-        const latestExecution = data[0]; // Executions are ordered by creation time desc
+      if (sortedData.length > 0 && !selectedExecution) {
+        const latestExecution = sortedData[0]; // Latest execution is now first
         setSelectedExecution(latestExecution);
       }
     } catch (err) {
       setError('Failed to load execution records');
       console.error('Failed to load execution records:', err);
-    } finally {
-      setLoading(false);
     }
   }, [workflowId, selectedExecution]);
 
-  const loadFinalOutput = useCallback(async (executionId: number) => {
+  // Unified initialization function to prevent multiple async calls
+  const initializeExecutionView = useCallback(async () => {
+    if (!workflowId || isInitialized) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load workflow configuration and executions in parallel
+      await Promise.all([
+        loadWorkflowConfiguration(),
+        loadExecutions()
+      ]);
+      
+      setIsInitialized(true);
+    } catch (err) {
+      setError('Failed to load execution data');
+      console.error('Failed to initialize execution view:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [workflowId, isInitialized, loadWorkflowConfiguration, loadExecutions]);
+
+  const loadFinalOutput = useCallback(async (executionId: number, retryCount = 0) => {
+    let shouldSetLoadingFalse = true;
     try {
       setLoadingFinalOutput(true);
-      console.log('Loading final output for execution:', executionId);
+      console.log('Loading final output for execution:', executionId, 'retry:', retryCount);
+      
+      // 首先尝试从API获取final_output变量
       const output = await executionApi.getFinalOutput(executionId);
       console.log('Final output loaded:', output);
+      
+      // 如果没有找到final_output变量，尝试从End节点的执行历史获取
+      if (!output.has_output) {
+        console.log('No final_output variable found, checking execution history...');
+        try {
+          const historyResponse = await executionApi.getExecutionHistory(executionId);
+          const history = historyResponse.history;
+          
+          // 优先查找End节点的输出文本（通常是最终成果）
+          const endNode = history.find(item => item.node_type === 'end' && item.status === 'completed');
+          if (endNode) {
+            // 优先查看节点配置中的output_text模板输出
+            if (endNode.output && typeof endNode.output === 'string' && endNode.output.trim()) {
+              console.log('Found End node final output:', endNode.output);
+            setFinalOutput({
+              execution_id: executionId,
+              final_output: endNode.output,
+              has_output: true
+            });
+              return;
+            }
+          } else if (retryCount < 2) {
+            // 如果没有找到End节点或其输出，且重试次数小于2，则等待后重试
+            console.log('End node not found or no output, retrying in 2 seconds...');
+            shouldSetLoadingFalse = false; // Don't set loading to false, let the retry handle it
+            setTimeout(() => {
+              loadFinalOutput(executionId, retryCount + 1);
+            }, 2000);
+            return;
+          }
+          
+          // 查找Agent节点的输出作为备选方案（排除日志）
+          const agentNodes = history.filter(item => 
+            item.node_type === 'agent' && 
+            item.status === 'completed' && 
+            item.output && 
+            typeof item.output === 'string' && 
+            item.output.trim() && 
+            !item.output.includes('DEBUG') && 
+            !item.output.includes('INFO') &&
+            !item.output.includes('WARNING')
+          );
+          
+          if (agentNodes.length > 0) {
+            const lastAgent = agentNodes[agentNodes.length - 1];
+            console.log('Found Agent node output as final result:', lastAgent.output);
+            setFinalOutput({
+              execution_id: executionId,
+              final_output: lastAgent.output,
+              has_output: true
+            });
+            return;
+          }
+          
+          // 如果没有合适的成果内容，尝试获取最后一个完成的节点的输出
+          const lastCompletedNode = history
+            .filter(item => item.status === 'completed' && item.output)
+            .pop();
+          
+          if (lastCompletedNode && lastCompletedNode.output) {
+            console.log('Found last completed node output:', lastCompletedNode.output);
+            setFinalOutput({
+              execution_id: executionId,
+              final_output: lastCompletedNode.output,
+              has_output: true
+            });
+            return;
+          }
+        } catch (historyErr) {
+          console.error('Failed to load execution history:', historyErr);
+        }
+      }
+      
       setFinalOutput(output);
     } catch (err) {
       console.error('Failed to load final output:', err);
       setFinalOutput(null);
     } finally {
+      if (shouldSetLoadingFalse) {
       setLoadingFinalOutput(false);
+      }
     }
   }, []);
 
@@ -90,53 +206,64 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
     }
   }, [lastHistoryUpdateTime]);
 
+  // Single initialization effect
   useEffect(() => {
     if (workflowId) {
-      loadExecutions();
-    }
-  }, [workflowId, loadExecutions]);
-
-  // Add a refresh trigger for when switching to execution view
-  useEffect(() => {
-    // Force refresh executions when component mounts or workflowId changes
-    // This ensures we get the latest execution records when switching from Editor
-    if (workflowId) {
-      const timer = setTimeout(() => {
-        loadExecutions();
-      }, 100); // Small delay to ensure smooth transition
+      // Reset states when workflowId changes
+      setExecutions([]);
+      setSelectedExecution(null);
+      setFinalOutput(null);
+      setExecutionHistory([]);
+      setError(null);
+      setIsInitialized(false);
       
-      return () => clearTimeout(timer);
+      // Initialize execution view
+      initializeExecutionView();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowId]);
 
   // Track the last execution ID to avoid unnecessary reloads
   const [lastExecutionId, setLastExecutionId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (selectedExecution) {
-      // Only force reload if the execution ID actually changed
+    if (selectedExecution && isInitialized) {
+      // Only force reload if the execution ID actually changed and initialization is complete
       if (selectedExecution.id !== lastExecutionId) {
+        // For completed executions, load history first then final output
+        if (selectedExecution.status === ExecutionStatus.COMPLETED) {
+          loadExecutionHistory(selectedExecution.id, true);
+          setTimeout(() => {
         loadFinalOutput(selectedExecution.id);
-        loadExecutionHistory(selectedExecution.id, true); // Force update when execution ID changes
+          }, 300);
+        } else {
+          loadFinalOutput(selectedExecution.id);
+          loadExecutionHistory(selectedExecution.id, true);
+        }
         setLastExecutionId(selectedExecution.id);
       }
     }
-  }, [selectedExecution?.id, lastExecutionId, loadFinalOutput, loadExecutionHistory]);
+  }, [selectedExecution?.id, lastExecutionId, isInitialized, loadFinalOutput, loadExecutionHistory]);
 
   const handleExecuteWorkflow = async () => {
-    if (!workflowId) return;
+    if (!workflowId || !isInitialized) return;
 
     try {
       const execution = await executionApi.executeWorkflow(workflowId);
-      setExecutions([execution, ...executions]);
+      // Add new execution to the top of the list (newest first)
+      setExecutions(prevExecutions => [execution, ...prevExecutions]);
       setSelectedExecution(execution);
+      setLastExecutionId(execution.id);
       
       // Clear previous execution history to show fresh start
       setExecutionHistory([]);
       setFinalOutput(null);
       
-      // Poll execution status
+      // Add 3-second startup pause before beginning status polling
+      console.log('Starting workflow execution with 3-second startup pause...');
+      setTimeout(() => {
       pollExecutionStatus(execution.id);
+      }, 3000);
     } catch (err) {
       alert('Failed to start execution');
       console.error('Failed to start execution:', err);
@@ -172,6 +299,11 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
               selectedExecution.current_node !== execution.current_node ||
               selectedExecution.completed_at !== execution.completed_at) {
             setSelectedExecution(execution);
+            
+            // Update execution history whenever current_node changes
+            if (selectedExecution.current_node !== execution.current_node) {
+              loadExecutionHistory(executionId, true);
+            }
           }
         }
 
@@ -190,24 +322,33 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
             return prev;
           });
           
-          // Update selectedExecution and then load final output
-          setSelectedExecution(prev => {
-            if (prev?.id === executionId) {
-              const updatedExecution = { ...prev, ...execution };
-              // Load final output after updating the state
-              setTimeout(() => {
+          // Update selectedExecution and immediately load final output
+          if (selectedExecution?.id === executionId) {
+            setSelectedExecution(execution);
+            
+            // Load final output after ensuring execution history is updated
                 console.log('Loading final output for completed execution:', executionId);
-                loadFinalOutput(executionId);
-                loadExecutionHistory(executionId, true);
-              }, 50);
-              return updatedExecution;
-            }
-            return prev;
-          });
+            setTimeout(async () => {
+              try {
+                // Load execution history first to ensure End node data is available
+                await loadExecutionHistory(executionId, true);
+                // Wait a bit more to ensure data consistency
+                setTimeout(async () => {
+                  await loadFinalOutput(executionId);
+                }, 500);
+              } catch (error) {
+                console.error('Failed to load final output or history:', error);
+              }
+            }, 1000);
+          }
         } else if (execution.status === ExecutionStatus.PAUSED) {
-          // Only reload history when execution is paused (human control triggered)
-          // This prevents unnecessary updates during normal running state
+          // Reload history when execution is paused (human control triggered)
           if (selectedExecution?.id === executionId && selectedExecution?.status !== ExecutionStatus.PAUSED) {
+            loadExecutionHistory(executionId, true);
+          }
+        } else if (execution.status === ExecutionStatus.RUNNING) {
+          // Also update history during running state to ensure real-time sync
+          if (selectedExecution?.id === executionId) {
             loadExecutionHistory(executionId);
           }
         }
@@ -216,13 +357,13 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
         clearInterval(pollInterval);
         setCurrentPollingId(null);
       }
-    }, 1000);
+    }, 3000); // Changed to 3-second intervals as requested
 
-    // Stop polling after 30 seconds
+    // Stop polling after 90 seconds (extended due to longer intervals)
     setTimeout(() => {
       clearInterval(pollInterval);
       setCurrentPollingId(null);
-    }, 30000);
+    }, 90000);
   };
 
   const handleDeleteExecution = async (executionId: number, e: React.MouseEvent) => {
@@ -371,11 +512,44 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-xl border border-gray-100">
-          <div className="animate-spin text-6xl mb-4">⚡</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading...</h2>
-          <p className="text-gray-600">Getting execution records</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="container mx-auto px-6 py-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Execution Manager
+              </h1>
+              <p className="text-gray-600 mt-2">Monitor and manage workflow execution status</p>
+            </div>
+            <div className="flex space-x-3">
+              {onReturnToEditor && (
+                <button
+                  onClick={onReturnToEditor}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center space-x-2"
+                >
+                  <span>📋</span>
+                  <span>Back to Workflow</span>
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Loading State */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+              <h2 className="text-lg font-bold flex items-center space-x-2">
+                <span>🔄</span>
+                <span>Loading Execution Data</span>
+              </h2>
+            </div>
+            <div className="p-8">
+              <div className="text-center text-gray-500">
+                <div className="text-4xl mb-4">📊</div>
+                <p>Loading execution records...</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -434,184 +608,160 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
             executionHistory={executionHistory}
             currentNode={selectedExecution?.current_node}
             executionStatus={selectedExecution?.status}
-            isLoading={loadingHistory}
+            isLoading={loading || loadingHistory || !isInitialized}
+            workflowNodes={workflowNodes}
           />
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          {/* Execution List */}
-          <div className="xl:col-span-1">
+        {/* Main Content Layout */}
+        <div className="flex gap-8">
+          {/* Left Sidebar */}
+          <div className="w-80 flex-shrink-0 space-y-6">
+            {/* Execution History */}
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-              <div className="p-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                <h2 className="text-xl font-bold flex items-center space-x-2">
+              <div className="p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                <h2 className="text-lg font-bold flex items-center space-x-2">
                   <span>📋</span>
                   <span>Execution History</span>
                 </h2>
               </div>
-              <div className="p-6">
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="p-4">
+                <div className="space-y-3 max-h-80 overflow-y-auto">
                   {executions.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <div className="text-4xl mb-4">📝</div>
-                      <p>No execution records yet</p>
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="text-3xl mb-2">📝</div>
+                      <p className="text-sm">No executions yet</p>
                     </div>
                   ) : (
                     executions.map((execution) => (
                       <div
                         key={execution.id}
-                        className={`p-4 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 ${
+                        className={`p-3 rounded-lg cursor-pointer transition-all duration-200 ${
                           selectedExecution?.id === execution.id 
-                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300 shadow-lg' 
+                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300 shadow-md' 
                             : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                         }`}
                         onClick={() => setSelectedExecution(execution)}
                       >
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-2xl">{getStatusIcon(execution.status)}</span>
-                            <div>
-                              <span className="font-bold text-gray-800">Execution #{execution.id}</span>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(execution.status)}`}>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-lg">{getStatusIcon(execution.status)}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-800 text-sm truncate">Execution #{execution.id}</div>
+                            <div className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(execution.status)}`}>
                                   {execution.status}
                                 </div>
-                                {execution.status === ExecutionStatus.PAUSED && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedExecution(execution);
-                                      setShowHumanFeedback(true);
-                                    }}
-                                    className="px-2 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-200"
-                                  >
-                                    Human Feedback
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <div className="text-sm text-gray-500 bg-white px-2 py-1 rounded-lg">
-                              {formatDuration(execution.started_at, execution.completed_at)}
                             </div>
                             <button
                               onClick={(e) => handleDeleteExecution(execution.id, e)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg p-1 transition-colors"
-                              title="Delete execution record"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-1 transition-colors"
+                            title="Delete"
                             >
-                              <span className="text-lg">🗑️</span>
+                            <span className="text-sm">🗑️</span>
                             </button>
-                          </div>
                         </div>
                         
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span>🕐</span>
-                            <span>Started: {formatDate(execution.started_at)}</span>
-                          </div>
+                        <div className="text-xs text-gray-600">
+                          <div>📅 {formatDate(execution.started_at)}</div>
                           {execution.completed_at && (
-                            <div className="flex items-center space-x-2">
-                              <span>🏁</span>
-                              <span>Completed: {formatDate(execution.completed_at)}</span>
-                            </div>
+                            <div>⏱️ {formatDuration(execution.started_at, execution.completed_at)}</div>
                           )}
                         </div>
 
-                        {execution.error_message && (
-                          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                            <div className="flex items-center space-x-2">
-                              <span>❌</span>
-                              <span>Error: {execution.error_message}</span>
-                            </div>
-                          </div>
+                        {execution.status === ExecutionStatus.PAUSED && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedExecution(execution);
+                              setShowHumanFeedback(true);
+                            }}
+                            className="mt-2 w-full px-2 py-1 bg-orange-500 text-white text-xs rounded-lg hover:bg-orange-600 transition-all duration-200"
+                          >
+                            Human Feedback
+                          </button>
                         )}
                       </div>
                     ))
                   )}
-                </div>
               </div>
             </div>
           </div>
 
           {/* Execution Details */}
-          <div className="xl:col-span-2">
-            {selectedExecution ? (
-              <div className="space-y-6">
-                {/* Basic Information Card */}
+            {selectedExecution && (
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                  <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
                     <div className="flex justify-between items-center">
-                      <h2 className="text-xl font-bold flex items-center space-x-2">
+                    <h2 className="text-lg font-bold flex items-center space-x-2">
                         <span>📊</span>
                         <span>Execution Details</span>
                       </h2>
                       {selectedExecution.status === ExecutionStatus.PAUSED && (
                         <button
                           onClick={handleShowHumanFeedback}
-                          className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all duration-200 flex items-center space-x-2"
+                        className="px-3 py-1 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all duration-200 text-sm"
                         >
-                          <span>⏸️</span>
-                          <span>Human Feedback</span>
+                        ⏸️ Human Feedback
                         </button>
                       )}
                     </div>
                   </div>
-                  <div className="p-6">
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-2xl">🆔</span>
+                <div className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">🆔</span>
                           <div>
-                            <span className="text-gray-500 text-sm">Execution ID</span>
-                            <div className="font-bold text-lg">{selectedExecution.id}</div>
+                        <span className="text-gray-500 text-xs">ID</span>
+                        <div className="font-bold text-sm">{selectedExecution.id}</div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <span className="text-2xl">{getStatusIcon(selectedExecution.status)}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">{getStatusIcon(selectedExecution.status)}</span>
                           <div>
-                            <span className="text-gray-500 text-sm">Status</span>
-                            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedExecution.status)}`}>
+                        <span className="text-gray-500 text-xs">Status</span>
+                        <div className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedExecution.status)}`}>
                               {selectedExecution.status}
                             </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="space-y-4">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-2xl">🕐</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">🕐</span>
                           <div>
-                            <span className="text-gray-500 text-sm">Start Time</span>
-                            <div className="font-medium">{formatDate(selectedExecution.started_at)}</div>
+                        <span className="text-gray-500 text-xs">Started</span>
+                        <div className="text-sm">{formatDate(selectedExecution.started_at)}</div>
                           </div>
                         </div>
                         {selectedExecution.completed_at && (
-                          <div className="flex items-center space-x-3">
-                            <span className="text-2xl">🏁</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">🏁</span>
                             <div>
-                              <span className="text-gray-500 text-sm">Completion Time</span>
-                              <div className="font-medium">{formatDate(selectedExecution.completed_at)}</div>
+                          <span className="text-gray-500 text-xs">Completed</span>
+                          <div className="text-sm">{formatDate(selectedExecution.completed_at)}</div>
                             </div>
                           </div>
                         )}
-                      </div>
-                    </div>
-
                     {selectedExecution.current_node && (
-                      <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center space-x-2">
-                          <span className="text-xl">⚡</span>
-                          <span className="font-medium text-blue-800">Current Node: {selectedExecution.current_node}</span>
+                          <span className="text-sm">⚡</span>
+                          <span className="text-xs font-medium text-blue-800">Current: {selectedExecution.current_node}</span>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+                </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1">
+            {selectedExecution ? (
+              <div className="space-y-6">
 
                 {/* Final Output Card */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                  <div className="p-6 bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
-                    <h2 className="text-xl font-bold flex items-center space-x-2">
+                  <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+                    <h2 className="text-lg font-bold flex items-center space-x-2">
                       <span>🎯</span>
                       <span>Final Output</span>
                     </h2>
@@ -619,7 +769,7 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                   <div className="p-6">
                     {loadingFinalOutput ? (
                       <div className="text-center py-8">
-                        <div className="animate-spin text-4xl mb-4">⚡</div>
+                        <div className="text-4xl mb-4">📊</div>
                         <p className="text-gray-600">Loading final output...</p>
                       </div>
                     ) : finalOutput?.has_output ? (
@@ -629,11 +779,16 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                             <span className="text-xl">✨</span>
                             <span className="font-medium text-emerald-800">Execution Result</span>
                           </div>
-                          <div className="bg-white p-4 rounded-lg border border-emerald-200 font-mono text-sm">
-                            {typeof finalOutput.final_output === 'string' 
-                              ? finalOutput.final_output 
-                              : JSON.stringify(finalOutput.final_output, null, 2)
-                            }
+                          <div className="bg-white p-4 rounded-lg border border-emerald-200">
+                            {typeof finalOutput.final_output === 'string' ? (
+                              <div className="prose max-w-none prose-emerald prose-headings:text-emerald-800 prose-p:text-gray-700 prose-strong:text-emerald-900 prose-code:text-emerald-700 prose-code:bg-emerald-50 prose-pre:bg-emerald-50 prose-pre:border-emerald-200">
+                                <ReactMarkdown>{finalOutput.final_output}</ReactMarkdown>
+                              </div>
+                            ) : (
+                              <pre className="text-sm font-mono overflow-auto">
+                                {JSON.stringify(finalOutput.final_output, null, 2)}
+                              </pre>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -650,11 +805,11 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                 {/* Workflow History Card */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                   <div 
-                    className="p-6 bg-gradient-to-r from-purple-500 to-violet-600 text-white cursor-pointer"
+                    className="p-4 bg-gradient-to-r from-purple-500 to-violet-600 text-white cursor-pointer"
                     onClick={() => setShowHistory(!showHistory)}
                   >
                     <div className="flex justify-between items-center">
-                      <h2 className="text-xl font-bold flex items-center space-x-2">
+                      <h2 className="text-lg font-bold flex items-center space-x-2">
                         <span>📜</span>
                         <span>Workflow Execution History</span>
                       </h2>
@@ -671,7 +826,7 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                     <div className="p-6">
                       {loadingHistory ? (
                         <div className="text-center py-8">
-                          <div className="animate-spin text-4xl mb-4">⚡</div>
+                          <div className="text-4xl mb-4">📜</div>
                           <p className="text-gray-600">Loading execution history...</p>
                         </div>
                       ) : executionHistory.length > 0 ? (
@@ -755,7 +910,9 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                                     <div className="flex justify-start">
                                       <div className="max-w-xs lg:max-w-md bg-gray-200 text-gray-800 rounded-lg px-4 py-2">
                                         <div className="text-xs text-gray-600 mb-1">AI Response</div>
-                                        <div className="text-sm">{historyItem.agent_response}</div>
+                                        <div className="text-sm prose prose-sm max-w-none prose-gray">
+                                          <ReactMarkdown>{historyItem.agent_response}</ReactMarkdown>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -810,8 +967,8 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                 {/* Execution Variables Card */}
                 {selectedExecution.variables && (
                   <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="p-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
-                      <h2 className="text-xl font-bold flex items-center space-x-2">
+                    <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+                      <h2 className="text-lg font-bold flex items-center space-x-2">
                         <span>🔧</span>
                         <span>Execution Variables</span>
                       </h2>
@@ -827,8 +984,8 @@ const ExecutionView: React.FC<ExecutionViewProps> = ({ workflowId, onReturnToEdi
                 {/* Error Information Card */}
                 {selectedExecution.error_message && (
                   <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="p-6 bg-gradient-to-r from-red-500 to-pink-600 text-white">
-                      <h2 className="text-xl font-bold flex items-center space-x-2">
+                    <div className="p-4 bg-gradient-to-r from-red-500 to-pink-600 text-white">
+                      <h2 className="text-lg font-bold flex items-center space-x-2">
                         <span>⚠️</span>
                         <span>Error Information</span>
                       </h2>

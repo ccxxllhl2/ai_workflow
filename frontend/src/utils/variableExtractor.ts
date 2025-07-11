@@ -19,8 +19,21 @@ export const extractVariablesFromNodes = (nodes: WorkflowNode[]): Variable[] => 
     
     switch (node.type) {
       case NodeType.START:
-        // Extract from initial variables
-        if (config.initialVariables) {
+        // Extract from new startVariables format (preferred)
+        if (config.startVariables && Array.isArray(config.startVariables)) {
+          config.startVariables.forEach((variable: any) => {
+            if (variable.name && variable.name.trim()) {
+              variables.push({
+                name: variable.name,
+                nodeId: node.id,
+                nodeLabel: node.data.label || 'Start',
+                nodeType: node.type,
+                source: 'initial'
+              });
+            }
+          });
+        } else if (config.initialVariables) {
+          // Fallback to old initialVariables format for backwards compatibility
           try {
             const initialVars = JSON.parse(config.initialVariables);
             Object.keys(initialVars).forEach(varName => {

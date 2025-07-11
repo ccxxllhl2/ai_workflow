@@ -36,3 +36,32 @@
     transform: rotate(360deg);
   }
 }
+
+/* Custom slide up animation for execution view */
+@keyframes slide-up-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-up-fade-in {
+  animation: slide-up-fade-in 0.4s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}

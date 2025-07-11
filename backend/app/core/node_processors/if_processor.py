@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from app.core.node_processors.base_processor import BaseNodeProcessor
@@ -95,6 +96,10 @@ class IfNodeProcessor(BaseNodeProcessor):
             if actual_value is None:
                 return False
             
+            # 转换为字符串以便进行字符串操作
+            actual_str = str(actual_value)
+            expected_str = str(expected_value) if expected_value is not None else ""
+            
             # 根据操作符进行比较
             if operator == '==':
                 return actual_value == expected_value
@@ -109,9 +114,28 @@ class IfNodeProcessor(BaseNodeProcessor):
             elif operator == '<=':
                 return float(actual_value) <= float(expected_value)
             elif operator == 'contains':
-                return str(expected_value) in str(actual_value)
+                return expected_str in actual_str
             elif operator == 'not_contains':
-                return str(expected_value) not in str(actual_value)
+                return expected_str not in actual_str
+            elif operator == 'starts_with':
+                return actual_str.startswith(expected_str)
+            elif operator == 'ends_with':
+                return actual_str.endswith(expected_str)
+            elif operator == 'regex_match':
+                try:
+                    return bool(re.search(expected_str, actual_str))
+                except re.error:
+                    return False
+            elif operator == 'length_gt':
+                return len(actual_str) > int(expected_value)
+            elif operator == 'length_lt':
+                return len(actual_str) < int(expected_value)
+            elif operator == 'length_eq':
+                return len(actual_str) == int(expected_value)
+            elif operator == 'is_empty':
+                return len(actual_str.strip()) == 0
+            elif operator == 'is_not_empty':
+                return len(actual_str.strip()) > 0
             else:
                 return False
                 

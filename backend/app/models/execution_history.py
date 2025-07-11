@@ -4,11 +4,22 @@ from datetime import datetime
 import enum
 from app.database.database import Base
 
-class ExecutionHistoryStatus(enum.Enum):
+class ExecutionHistoryStatus(str, enum.Enum):
+    """执行历史状态枚举 - 继承str确保与SQLAlchemy兼容"""
     STARTED = "started"
     COMPLETED = "completed"
     FAILED = "failed"
     PAUSED = "paused"
+    
+    @classmethod
+    def _missing_(cls, value):
+        """处理未知枚举值，提供向后兼容性"""
+        if isinstance(value, str):
+            # 尝试大写版本
+            for member in cls:
+                if member.value.lower() == value.lower():
+                    return member
+        return cls.STARTED  # 默认返回STARTED
 
 class ExecutionHistory(Base):
     __tablename__ = "execution_history"
@@ -18,7 +29,8 @@ class ExecutionHistory(Base):
     node_id = Column(String(255), nullable=False)  # 节点ID
     node_type = Column(String(50), nullable=False)  # 节点类型
     node_name = Column(String(255), nullable=True)  # 节点名称/标题
-    status = Column(Enum(ExecutionHistoryStatus), nullable=False)
+    status = Column(Enum(ExecutionHistoryStatus, values_callable=lambda x: [e.value for e in x]), 
+                   nullable=False)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     duration = Column(Float, nullable=True)  # 执行持续时间（秒）

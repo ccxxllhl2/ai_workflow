@@ -136,46 +136,6 @@ class WorkflowExecuteRequest(BaseModel):
 class ContinueExecutionRequest(BaseModel):
     variables: Optional[Dict[str, Any]] = None
 
-# 用户相关模式
-class UserBase(BaseModel):
-    username: str
-
-class UserCreate(UserBase):
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class UserResponse(UserBase):
-    id: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# 评价相关模式
-class WorkflowRatingCreate(BaseModel):
-    workflow_id: int
-    is_liked: Optional[bool] = None  # True=like, False=dislike, None=remove rating
-
-class WorkflowRatingResponse(BaseModel):
-    id: int
-    user_id: int
-    workflow_id: int
-    is_liked: Optional[bool]
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# 带评价信息的工作流响应
-class WorkflowWithRatingResponse(WorkflowResponse):
-    user_rating: Optional[bool] = None  # 当前用户的评价
-    like_count: int = 0  # 总点赞数
-    dislike_count: int = 0  # 总点踩数
-
 # 工作流导出和导入相关模式
 class WorkflowExportData(BaseModel):
     """工作流导出数据格式"""
