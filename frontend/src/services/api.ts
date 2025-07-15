@@ -207,4 +207,31 @@ export const executionApi = {
   },
 };
 
+// Meta API
+export const metaApi = {
+  // Get all meta configurations
+  getAllMeta: async (): Promise<Record<string, string>> => {
+    const response = await api.get('/meta');
+    return response.data;
+  },
+
+  // Create or update meta configuration
+  createOrUpdateMeta: async (key: string, value: string): Promise<any> => {
+    const response = await api.post('/meta', { key, value });
+    return response.data;
+  },
+
+  // Update meta configuration
+  updateMeta: async (key: string, value: string): Promise<any> => {
+    const response = await api.put(`/meta/${key}`, { value });
+    return response.data;
+  },
+
+  // Delete meta configuration
+  deleteMeta: async (key: string): Promise<any> => {
+    const response = await api.delete(`/meta/${key}`);
+    return response.data;
+  },
+};
+
 export default api; 

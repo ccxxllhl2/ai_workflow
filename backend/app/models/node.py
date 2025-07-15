@@ -9,6 +9,7 @@ class NodeType(str, enum.Enum):
     AGENT = "agent"
     IF = "if"
     HUMAN_CONTROL = "human_control"
+    JIRA = "jira"
     END = "end"
     
     @classmethod

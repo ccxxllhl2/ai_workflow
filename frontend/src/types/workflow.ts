@@ -11,6 +11,7 @@ export enum NodeType {
   AGENT = 'agent',
   IF = 'if',
   HUMAN_CONTROL = 'human_control',
+  JIRA = 'jira',
   END = 'end'
 }
 

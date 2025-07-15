@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { WorkflowNode, NodeType, Agent } from '../../types/workflow';
 import { agentApi } from '../../services/api';
 import { Variable } from '../../utils/variableExtractor';
+import { JiraConfigPanel } from '../NodeTypes/JiraNode';
 
 interface NodeConfigPanelProps {
   node: WorkflowNode | null;
@@ -10,6 +11,119 @@ interface NodeConfigPanelProps {
   onSave: (nodeId: string, config: any) => void;
   variables: Variable[];
 }
+
+// New component for IfNode configuration
+const IfNodeConfig: React.FC<{
+  config: any;
+  onConfigChange: (newConfig: any) => void;
+  variables: Variable[];
+}> = ({ config, onConfigChange, variables }) => {
+  const [conditions, setConditions] = useState(config.conditions || []);
+  const [logic, setLogic] = useState(config.logic || 'AND');
+
+  useEffect(() => {
+    onConfigChange({ ...config, conditions, logic });
+  }, [conditions, logic]);
+
+  const addCondition = () => {
+    setConditions([
+      ...conditions,
+      {
+        id: Date.now().toString(),
+        variable: '',
+        operator: '==',
+        value: '',
+      },
+    ]);
+  };
+
+  const updateCondition = (index: number, field: string, value: any) => {
+    const newConditions = [...conditions];
+    newConditions[index] = { ...newConditions[index], [field]: value };
+    setConditions(newConditions);
+  };
+
+  const removeCondition = (index: number) => {
+    setConditions(conditions.filter((condition: any, i: number) => i !== index));
+  };
+  
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        This node directs the workflow based on one or more conditions. If the conditions are met, the workflow follows the 'True' path; otherwise, it follows the 'False' path.
+      </p>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Condition Logic
+        </label>
+        <select
+          value={logic}
+          onChange={(e) => setLogic(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="AND">All conditions must be true (AND)</option>
+          <option value="OR">At least one condition must be true (OR)</option>
+        </select>
+      </div>
+
+      {conditions.map((condition: any, index: number) => (
+        <div key={condition.id} className="p-4 border border-gray-200 rounded-lg space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-gray-800">Condition #{index + 1}</span>
+            <button
+              onClick={() => removeCondition(index)}
+              className="text-red-500 hover:text-red-700"
+            >
+              Remove
+            </button>
+          </div>
+          <select
+            value={condition.variable}
+            onChange={(e) => updateCondition(index, 'variable', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <option value="">Select a variable</option>
+            {variables.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} (from {v.nodeLabel})
+              </option>
+            ))}
+          </select>
+          <select
+            value={condition.operator}
+            onChange={(e) => updateCondition(index, 'operator', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <option value="==">Equals</option>
+            <option value="!=">Not Equals</option>
+            <option value=">">Greater Than</option>
+            <option value="<">Less Than</option>
+            <option value=">=">Greater Than or Equal To</option>
+            <option value="<=">Less Than or Equal To</option>
+            <option value="contains">Contains</option>
+            <option value="not_contains">Does Not Contain</option>
+            <option value="starts_with">Starts With</option>
+            <option value="ends_with">Ends With</option>
+          </select>
+          <input
+            type="text"
+            value={condition.value}
+            onChange={(e) => updateCondition(index, 'value', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            placeholder="Value to compare"
+          />
+        </div>
+      ))}
+      <button
+        onClick={addCondition}
+        className="px-4 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200"
+      >
+        + Add Condition
+      </button>
+    </div>
+  );
+};
 
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   node,
@@ -448,227 +562,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   );
 
   const renderIfNodeConfig = () => {
-    const [conditionMode, setConditionMode] = useState(config.conditionMode || 'simple');
-    const [simpleCondition, setSimpleCondition] = useState(config.simpleCondition || {
-      variable: '',
-      operator: '==',
-      value: ''
-    });
-
-    const stringOperators = [
-      { value: '==', label: 'Equals (==)', description: 'Exact match' },
-      { value: '!=', label: 'Not Equals (!=)', description: 'Not equal to' },
-      { value: 'contains', label: 'Contains', description: 'String contains substring' },
-      { value: 'not_contains', label: 'Not Contains', description: 'String does not contain substring' },
-      { value: 'starts_with', label: 'Starts With', description: 'String starts with prefix' },
-      { value: 'ends_with', label: 'Ends With', description: 'String ends with suffix' },
-      { value: 'regex_match', label: 'Regex Match', description: 'String matches regular expression' },
-      { value: 'length_gt', label: 'Length >', description: 'String length greater than' },
-      { value: 'length_lt', label: 'Length <', description: 'String length less than' },
-      { value: 'length_eq', label: 'Length =', description: 'String length equals' },
-      { value: 'is_empty', label: 'Is Empty', description: 'String is empty or whitespace' },
-      { value: 'is_not_empty', label: 'Is Not Empty', description: 'String has content' },
-      { value: '>', label: 'Greater Than (>)', description: 'Numeric comparison' },
-      { value: '<', label: 'Less Than (<)', description: 'Numeric comparison' },
-      { value: '>=', label: 'Greater or Equal (>=)', description: 'Numeric comparison' },
-      { value: '<=', label: 'Less or Equal (<=)', description: 'Numeric comparison' }
-    ];
-
-    const updateSimpleCondition = (field: string, value: string) => {
-      const newCondition = { ...simpleCondition, [field]: value };
-      setSimpleCondition(newCondition);
-      
-      // Generate condition expression
-      let conditionExpr = '';
-      if (newCondition.variable && newCondition.operator) {
-        const varRef = `{{${newCondition.variable}}}`;
-        
-        switch (newCondition.operator) {
-          case 'is_empty':
-            conditionExpr = `(${varRef} | string | trim | length) == 0`;
-            break;
-          case 'is_not_empty':
-            conditionExpr = `(${varRef} | string | trim | length) > 0`;
-            break;
-          case 'contains':
-            conditionExpr = `'${newCondition.value}' in (${varRef} | string)`;
-            break;
-          case 'not_contains':
-            conditionExpr = `'${newCondition.value}' not in (${varRef} | string)`;
-            break;
-          case 'starts_with':
-            conditionExpr = `(${varRef} | string).startswith('${newCondition.value}')`;
-            break;
-          case 'ends_with':
-            conditionExpr = `(${varRef} | string).endswith('${newCondition.value}')`;
-            break;
-          case 'regex_match':
-            conditionExpr = `${varRef} | regex_search('${newCondition.value}')`;
-            break;
-          case 'length_gt':
-            conditionExpr = `(${varRef} | string | length) > ${newCondition.value}`;
-            break;
-          case 'length_lt':
-            conditionExpr = `(${varRef} | string | length) < ${newCondition.value}`;
-            break;
-          case 'length_eq':
-            conditionExpr = `(${varRef} | string | length) == ${newCondition.value}`;
-            break;
-          default:
-            // Standard comparison operators
-            if (['>', '<', '>=', '<='].includes(newCondition.operator)) {
-              conditionExpr = `${varRef} ${newCondition.operator} ${newCondition.value}`;
-            } else {
-              conditionExpr = `${varRef} ${newCondition.operator} '${newCondition.value}'`;
-            }
-        }
-      }
-      
-      setConfig({
-        ...config,
-        conditionMode: 'simple',
-        simpleCondition: newCondition,
-        condition: conditionExpr
-      });
-    };
-
-    return (
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Condition Mode
-          </label>
-          <div className="flex space-x-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="simple"
-                checked={conditionMode === 'simple'}
-                onChange={(e) => {
-                  setConditionMode(e.target.value);
-                  setConfig({ ...config, conditionMode: e.target.value });
-                }}
-                className="mr-2"
-              />
-              <span className="text-sm">Simple Builder</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="advanced"
-                checked={conditionMode === 'advanced'}
-                onChange={(e) => {
-                  setConditionMode(e.target.value);
-                  setConfig({ ...config, conditionMode: e.target.value });
-                }}
-                className="mr-2"
-              />
-              <span className="text-sm">Advanced Expression</span>
-            </label>
-          </div>
-        </div>
-
-        {conditionMode === 'simple' ? (
-          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Variable
-                </label>
-                <select
-                  value={simpleCondition.variable}
-                  onChange={(e) => updateSimpleCondition('variable', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Variable</option>
-                  {variables.map((variable, index) => (
-                    <option key={`${variable.nodeId}-${variable.name}-${index}`} value={variable.name}>
-                      {variable.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Operator
-                </label>
-                <select
-                  value={simpleCondition.operator}
-                  onChange={(e) => updateSimpleCondition('operator', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {stringOperators.map((op) => (
-                    <option key={op.value} value={op.value} title={op.description}>
-                      {op.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Value
-                </label>
-                <input
-                  type="text"
-                  value={simpleCondition.value}
-                  onChange={(e) => updateSimpleCondition('value', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={['is_empty', 'is_not_empty'].includes(simpleCondition.operator) ? 'No value needed' : 'Enter comparison value'}
-                  disabled={['is_empty', 'is_not_empty'].includes(simpleCondition.operator)}
-                />
-              </div>
-            </div>
-            <div className="text-xs text-gray-600 bg-white p-2 rounded border">
-              <strong>Generated Expression:</strong> {config.condition || 'Configure the condition above'}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Advanced Condition Expression
-            </label>
-            <input
-              type="text"
-              value={config.condition !== undefined ? config.condition : ''}
-              onChange={(e) => setConfig({ ...config, condition: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="{{variable}} == 'value'"
-            />
-            <div className="text-xs text-gray-500 mt-1">
-              Supports Jinja2 syntax, e.g: {'{{variable}} == "value"'} or {'{{number}} > 10'}
-            </div>
-          </div>
-        )}
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              True Branch Label
-            </label>
-            <input
-              type="text"
-              value={config.trueLabel !== undefined ? config.trueLabel : 'Yes'}
-              onChange={(e) => setConfig({ ...config, trueLabel: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Yes"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              False Branch Label
-            </label>
-            <input
-              type="text"
-              value={config.falseLabel !== undefined ? config.falseLabel : 'No'}
-              onChange={(e) => setConfig({ ...config, falseLabel: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="No"
-            />
-          </div>
-        </div>
-      </div>
-    );
+    return <IfNodeConfig config={config} onConfigChange={setConfig} variables={variables} />;
   };
 
   const renderHumanControlNodeConfig = () => (
@@ -810,6 +704,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return renderIfNodeConfig();
       case NodeType.HUMAN_CONTROL:
         return renderHumanControlNodeConfig();
+      case NodeType.JIRA:
+        return <JiraConfigPanel data={config} onChange={setConfig} />;
       case NodeType.END:
         return renderEndNodeConfig();
       default:
@@ -831,6 +727,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         return 'Condition Node';
       case NodeType.HUMAN_CONTROL:
         return 'Human Control Node';
+      case NodeType.JIRA:
+        return 'Jira Node';
       case NodeType.END:
         return 'End Node';
       default:

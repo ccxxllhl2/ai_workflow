@@ -12,6 +12,7 @@ from app.core.node_processors.start_processor import StartNodeProcessor
 from app.core.node_processors.agent_processor import AgentNodeProcessor
 from app.core.node_processors.if_processor import IfNodeProcessor
 from app.core.node_processors.human_control_processor import HumanControlNodeProcessor
+from app.core.node_processors.jira_processor import JiraProcessor
 from app.core.node_processors.end_processor import EndNodeProcessor
 from datetime import datetime
 
@@ -23,9 +24,10 @@ class WorkflowEngine:
         # 节点处理器映射
         self.processors = {
             NodeType.START: StartNodeProcessor(),
-            NodeType.AGENT: AgentNodeProcessor(),
+            NodeType.AGENT: AgentNodeProcessor(db),
             NodeType.IF: IfNodeProcessor(),
             NodeType.HUMAN_CONTROL: HumanControlNodeProcessor(),
+            NodeType.JIRA: JiraProcessor(db, self.variable_manager),
             NodeType.END: EndNodeProcessor()
         }
     

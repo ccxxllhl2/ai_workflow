@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.database import engine, Base
-from app.api import workflows, agents, execution
+from app.api import workflows, agents, execution, meta
 
 # 导入所有模型以确保表被创建
 from app.models.workflow import Workflow
@@ -10,6 +10,7 @@ from app.models.agent import Agent
 from app.models.execution import Execution
 from app.models.variable import Variable
 from app.models.execution_history import ExecutionHistory, ChatMessage
+from app.models.meta import Meta
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -33,6 +34,7 @@ app.add_middleware(
 app.include_router(workflows.router, prefix="/api/workflows", tags=["workflows"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(execution.router, prefix="/api/executions", tags=["executions"])
+app.include_router(meta.router, prefix="/api/meta", tags=["meta"])
 
 @app.get("/")
 async def root():

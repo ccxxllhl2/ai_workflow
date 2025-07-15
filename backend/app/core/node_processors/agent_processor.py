@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from app.core.node_processors.base_processor import BaseNodeProcessor
 from app.core.variable_manager import VariableManager
 from app.models.agent import Agent
+from app.models.meta import Meta
 
 # 加载根目录的.env文件
 # 获取当前文件的路径，然后向上找到项目根目录
@@ -28,6 +29,9 @@ else:
 
 class AgentNodeProcessor(BaseNodeProcessor):
     """Agent节点处理器"""
+    
+    def __init__(self, db: Session = None):
+        self.db = db
     
     async def process(
         self, 
@@ -190,11 +194,15 @@ class AgentNodeProcessor(BaseNodeProcessor):
     async def _call_openai_api(self, prompt: str, model_name: str = 'gpt-3.5-turbo') -> str:
         """调用OpenAI API"""
         try:
-            # 从环境变量获取API Key
-            openai_api_key = os.getenv('OPENAI_API_KEY')
+            # 首先从数据库获取API Key
+            openai_api_key = self._get_openai_api_key()
+            
+            # 如果数据库中没有，再从环境变量获取（向后兼容）
             if not openai_api_key:
-                available_env_vars = [key for key in os.environ.keys() if 'openai' in key.lower()]
-                return f"[错误] 未配置OPENAI_API_KEY环境变量。当前环境中的相关变量: {available_env_vars}"
+                openai_api_key = os.getenv('OPENAI_API_KEY')
+                
+            if not openai_api_key:
+                return f"[错误] 未配置OpenAI API Key，请在全局设置中配置或设置OPENAI_API_KEY环境变量"
             
             # 创建OpenAI客户端
             client = AsyncOpenAI(api_key=openai_api_key)
@@ -217,6 +225,16 @@ class AgentNodeProcessor(BaseNodeProcessor):
             
         except Exception as e:
             return f"[OpenAI API调用失败] {str(e)}"
+    
+    def _get_openai_api_key(self) -> str:
+        """从数据库获取OpenAI API Key"""
+        try:
+            if not self.db:
+                return ''
+            meta = self.db.query(Meta).filter(Meta.key == 'openai_token').first()
+            return meta.value if meta else ''
+        except Exception:
+            return ''
     
     async def _call_llm(self, agent: Agent, prompt: str) -> str:
         """调用LLM (兼容旧的Agent配置)"""

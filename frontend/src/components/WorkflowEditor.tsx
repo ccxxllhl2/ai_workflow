@@ -12,7 +12,6 @@ import ReactFlow, {
   OnConnect,
   NodeTypes,
   ReactFlowProvider,
-  EdgeTypes,
 } from 'reactflow';
 
 import 'reactflow/dist/style.css';
@@ -21,6 +20,7 @@ import StartNode from './NodeTypes/StartNode';
 import AgentNode from './NodeTypes/AgentNode';
 import IfNode from './NodeTypes/IfNode';
 import HumanControlNode from './NodeTypes/HumanControlNode';
+import JiraNode from './NodeTypes/JiraNode';
 import EndNode from './NodeTypes/EndNode';
 import NodeConfigPanel from './NodeConfigPanel/NodeConfigPanel';
 import VariablePanel from './VariablePanel/VariablePanel';
@@ -33,6 +33,7 @@ const nodeTypes: NodeTypes = {
   agent: AgentNode,
   if: IfNode,
   human_control: HumanControlNode,
+  jira: JiraNode,
   end: EndNode,
 };
 
@@ -148,6 +149,8 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         return 'Condition';
       case NodeType.HUMAN_CONTROL:
         return 'Human Control';
+      case NodeType.JIRA:
+        return 'Jira';
       case NodeType.END:
         return 'End';
       default:
@@ -170,6 +173,13 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
         return { condition: '', trueLabel: 'Yes', falseLabel: 'No' };
       case NodeType.HUMAN_CONTROL:
         return { message: '', timeout: 300, allowContinue: true };
+      case NodeType.JIRA:
+        return { 
+          title: 'Jira Node',
+          jiraSource: 'wpb', 
+          jiraKeys: '',
+          outputVariable: 'jira_output'
+        };
       case NodeType.END:
         return { outputFormat: 'json', successCode: 200 };
       default:
@@ -342,6 +352,12 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
     };
   }, []);
 
+  useEffect(() => {
+    if (workflow) {
+      restartPolling(workflow.id);
+    }
+  }, [workflow, restartPolling]);
+
   const getExecutionStatusColor = (status: ExecutionStatus | null) => {
     if (!status) return 'bg-gray-500';
     switch (status) {
@@ -490,6 +506,15 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onVie
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
             </svg>
             Human Control
+          </button>
+          <button
+            onClick={() => addNode(NodeType.JIRA)}
+            className="inline-flex items-center px-2 py-1 text-xs font-medium text-orange-800 bg-orange-100 border border-orange-200 rounded-md hover:bg-orange-200 transition-colors"
+          >
+            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd"/>
+            </svg>
+            Jira
           </button>
           <button
             onClick={() => addNode(NodeType.END)}

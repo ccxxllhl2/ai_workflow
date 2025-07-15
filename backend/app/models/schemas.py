@@ -14,6 +14,7 @@ class NodeTypeEnum(str, Enum):
     AGENT = "agent"
     IF = "if"
     HUMAN_CONTROL = "human_control"
+    JIRA = "jira"
     END = "end"
 
 class ExecutionStatusEnum(str, Enum):
@@ -124,6 +125,25 @@ class VariableCreate(VariableBase):
 class VariableResponse(VariableBase):
     id: int
     execution_id: int
+    
+    class Config:
+        from_attributes = True
+
+# Meta相关模式
+class MetaBase(BaseModel):
+    key: str
+    value: str
+
+class MetaCreate(MetaBase):
+    pass
+
+class MetaUpdate(BaseModel):
+    value: str
+
+class MetaResponse(MetaBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True

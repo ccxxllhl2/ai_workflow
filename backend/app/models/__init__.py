@@ -4,4 +4,5 @@ from .agent import Agent
 from .node import Node
 from .execution import Execution
 from .variable import Variable
-from .execution_history import ExecutionHistory 
+from .execution_history import ExecutionHistory
+from .meta import Meta 

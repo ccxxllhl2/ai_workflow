@@ -79,7 +79,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({
   const handleDeleteWorkflow = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!confirm('Are you sure you want to delete this workflow?')) {
+    if (window.confirm('Are you sure you want to delete this workflow?') === false) {
       return;
     }
 
