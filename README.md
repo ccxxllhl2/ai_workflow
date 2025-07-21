@@ -46,44 +46,6 @@ AI Workflow Platform 是一个现代化的智能工作流设计和执行平台�
 - **颜色编码**: 使用不同颜色标识变量来源
 - **响应式面板**: 可收缩的侧边面板，不影响主编辑区域
 
-## 🛠️ 技术栈
-
-### 前端
-- React 18 + TypeScript
-- Tailwind CSS
-- React Flow (工作流可视化)
-- Heroicons (图标库)
-
-### 后端
-- Python + Flask
-- SQLite 数据库
-- RESTful API
-
-## 📁 项目结构
-
-```
-ai_workflow/
-├── frontend/                 # React前端应用
-│   ├── src/
-│   │   ├── components/      # UI组件
-│   │   │   ├── WorkflowManager/    # 工作流管理器
-│   │   │   ├── WorkflowEditor/     # 工作流编辑器
-│   │   │   ├── VariablePanel/      # 变量面板 🆕
-│   │   │   ├── ExecutionView/      # 执行视图
-│   │   │   └── NodeTypes/          # 节点类型组件
-│   │   ├── services/        # API服务
-│   │   ├── types/          # TypeScript类型定义
-│   │   ├── utils/          # 工具函数
-│   │   │   └── variableExtractor.ts # 变量提取器 🆕
-│   │   └── App.tsx         # 主应用组件
-│   └── package.json
-├── backend/                  # Flask后端API
-│   ├── app.py              # 主应用文件
-│   ├── models.py           # 数据模型
-│   └── requirements.txt
-└── README.md
-```
-
 ## 🚀 快速开始
 
 ### 环境要求
